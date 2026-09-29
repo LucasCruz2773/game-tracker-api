@@ -6,3 +6,107 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum LibraryStatus {
+  BACKLOG
+  PLAYING
+  COMPLETED
+  DROPPED
+
+  @@map("library_status")
+}
+
+model User {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  /// Stored lowercased; normalized by the application before persisting.
+  email        String   @unique
+  /// Stored lowercased; used for the public profile URL.
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  libraryEntries GameLibrary[]
+  reviews        Review[]
+
+  @@map("users")
+}
+
+model Game {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  /// Identifier of the game in the RAWG catalog.
+  rawgId      Int       @unique @map("rawg_id")
+  slug        String    @unique
+  title       String
+  description String?
+  coverUrl    String?   @map("cover_url")
+  releaseDate DateTime? @map("release_date") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  genres         Genre[]
+  platforms      Platform[]
+  libraryEntries GameLibrary[]
+  reviews        Review[]
+
+  @@map("games")
+}
+
+model Genre {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  slug  String @unique
+  games Game[]
+
+  @@map("genres")
+}
+
+model Platform {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  slug  String @unique
+  games Game[]
+
+  @@map("platforms")
+}
+
+/// A game in a user's library. Constraints enforced by CHECK in the migration:
+/// hours_played >= 0, completed_at >= started_at, and completed_at only for COMPLETED.
+model GameLibrary {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  gameId      String        @map("game_id") @db.Uuid
+  status      LibraryStatus @default(BACKLOG)
+  hoursPlayed Int           @default(0) @map("hours_played")
+  startedAt   DateTime?     @map("started_at") @db.Date
+  completedAt DateTime?     @map("completed_at") @db.Date
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, gameId])
+  @@index([userId, status])
+  @@index([gameId])
+  @@map("game_library")
+}
+
+/// One review per user per game. Rating is 1–10 (half-star steps from 0.5 to 5),
+/// enforced by CHECK in the migration.
+model Review {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  gameId    String   @map("game_id") @db.Uuid
+  rating    Int      @db.SmallInt
+  body      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, gameId])
+  @@index([gameId, createdAt])
+  @@map("reviews")
+}
