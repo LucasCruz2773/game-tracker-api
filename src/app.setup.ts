@@ -1,8 +1,11 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import { SESSION_COOKIE_NAME } from './auth/auth.constants.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 
 export function configureApp(app: INestApplication): void {
+  app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -18,6 +21,7 @@ export function setupSwagger(app: INestApplication): void {
     .setTitle('GameTrack API')
     .setDescription('REST API for tracking a personal video game library')
     .setVersion('0.1.0')
+    .addCookieAuth(SESSION_COOKIE_NAME)
     .build();
 
   SwaggerModule.setup('docs', app, () =>
