@@ -24,7 +24,9 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "e2e:serve": "tsc -p tsconfig.build.json --outDir dist-e2e --tsBuildInfoFile dist-e2e/.tsbuildinfo && node scripts/e2e/serve.mjs",
+    "e2e:session": "node scripts/e2e/create-session.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
