@@ -1,30 +1,62 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
+import {
+  GoogleOAuthClient,
+  type GoogleProfile,
+} from '../src/auth/google/google-oauth.client.js';
+import { PrismaService } from '../src/database/prisma.service.js';
 import { createTestApp, resetDatabase } from './support/test-app.js';
 
-const validRegistration = {
-  email: 'player@gametrack.dev',
-  username: 'player_one',
-  password: 'correct-horse-battery',
+const FRONTEND_URL = 'http://localhost:5173';
+const GOOGLE_STATE = 'state-issued-by-api';
+const PKCE_VERIFIER = 'pkce-verifier';
+
+const googleProfile: GoogleProfile = {
+  googleId: '109876543210',
+  email: 'Lucas.Fernandes@gmail.com',
+  emailVerified: true,
+  displayName: 'Lucas Fernandes',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/avatar',
 };
 
-function getSessionCookie(response: request.Response): string | undefined {
+function createFakeGoogleOAuthClient() {
+  return {
+    createAuthorizationRequest: vi.fn().mockResolvedValue({
+      url: `https://accounts.google.com/o/oauth2/v2/auth?state=${GOOGLE_STATE}`,
+      state: GOOGLE_STATE,
+      codeVerifier: PKCE_VERIFIER,
+    }),
+    fetchProfile: vi.fn().mockResolvedValue(googleProfile),
+  };
+}
+
+function getCookie(
+  response: request.Response,
+  name: string,
+): string | undefined {
   const setCookieHeader = response.headers['set-cookie'] as unknown as
     string[] | undefined;
-  return setCookieHeader?.find((cookie) =>
-    cookie.startsWith('gametrack_session='),
-  );
+  return setCookieHeader?.find((cookie) => cookie.startsWith(`${name}=`));
 }
 
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
+  let prisma: PrismaService;
+  const googleOAuthClient = createFakeGoogleOAuthClient();
 
   beforeAll(async () => {
-    app = await createTestApp();
+    app = await createTestApp({
+      providerOverrides: [
+        { provide: GoogleOAuthClient, useValue: googleOAuthClient },
+      ],
+    });
+    prisma = app.get(PrismaService);
   });
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+    googleOAuthClient.fetchProfile.mockResolvedValue(googleProfile);
     await resetDatabase(app);
   });
 
@@ -32,118 +64,144 @@ describe('Auth (e2e)', () => {
     await app.close();
   });
 
-  describe('POST /auth/register', () => {
-    it('creates the user, starts a session and never exposes the password hash', async () => {
+  /** Runs the redirect to Google and the callback with the same browser cookies. */
+  async function signInWithGoogle(
+    callbackQuery: Record<string, string> = {
+      code: 'authorization-code',
+      state: GOOGLE_STATE,
+    },
+  ) {
+    const agent = request.agent(app.getHttpServer());
+    await agent.get('/auth/google').expect(302);
+    const callbackResponse = await agent
+      .get('/auth/google/callback')
+      .query(callbackQuery)
+      .expect(302);
+
+    return { agent, callbackResponse };
+  }
+
+  describe('GET /auth/google', () => {
+    it('redirects to Google and remembers the sign-in attempt in an HttpOnly cookie', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({ ...validRegistration, email: '  Player@GameTrack.dev ' })
-        .expect(201);
+        .get('/auth/google')
+        .expect(302);
 
-      expect(response.body).toEqual({
-        id: expect.any(String),
-        email: 'player@gametrack.dev',
-        username: 'player_one',
-        createdAt: expect.any(String),
-      });
-
-      const sessionCookie = getSessionCookie(response);
-      expect(sessionCookie).toContain('HttpOnly');
-      expect(sessionCookie).toContain('SameSite=Lax');
-    });
-
-    it('rejects an email that is already registered, ignoring case', async () => {
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send(validRegistration)
-        .expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          ...validRegistration,
-          email: 'PLAYER@gametrack.dev',
-          username: 'another_player',
-        })
-        .expect(409);
-
-      expect(response.body.message).toBe('Email is already in use');
-    });
-
-    it('rejects a username that is already taken', async () => {
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send(validRegistration)
-        .expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({ ...validRegistration, email: 'other@gametrack.dev' })
-        .expect(409);
-
-      expect(response.body.message).toBe('Username is already in use');
-    });
-
-    it('rejects invalid data and unknown fields', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({
-          email: 'not-an-email',
-          username: 'x',
-          password: 'short',
-          role: 'admin',
-        })
-        .expect(400);
-
-      expect(response.body.message).toEqual(
-        expect.arrayContaining([
-          'property role should not exist',
-          'email must be an email',
-          'password must be longer than or equal to 8 characters',
-        ]),
+      expect(response.headers['location']).toContain(
+        'https://accounts.google.com/',
+      );
+      expect(getCookie(response, 'gametrack_google_sign_in')).toContain(
+        'HttpOnly',
       );
     });
   });
 
-  describe('POST /auth/login', () => {
-    beforeEach(async () => {
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send(validRegistration)
-        .expect(201);
-    });
+  describe('GET /auth/google/callback', () => {
+    it('creates the account on first sign-in and returns to the app with a session', async () => {
+      const { agent, callbackResponse } = await signInWithGoogle();
 
-    it('starts a session that gives access to GET /auth/me', async () => {
-      const agent = request.agent(app.getHttpServer());
+      expect(callbackResponse.headers['location']).toBe(`${FRONTEND_URL}/`);
+      expect(getCookie(callbackResponse, 'gametrack_session')).toContain(
+        'HttpOnly',
+      );
+      expect(googleOAuthClient.fetchProfile).toHaveBeenCalledWith(
+        'authorization-code',
+        PKCE_VERIFIER,
+      );
 
-      await agent
-        .post('/auth/login')
-        .send({
-          email: validRegistration.email,
-          password: validRegistration.password,
-        })
-        .expect(200);
-
-      const response = await agent.get('/auth/me').expect(200);
-      expect(response.body).toMatchObject({
-        email: validRegistration.email,
-        username: validRegistration.username,
+      const me = await agent.get('/auth/me').expect(200);
+      expect(me.body).toEqual({
+        id: expect.any(String),
+        email: 'lucas.fernandes@gmail.com',
+        username: 'lucas_fernandes',
+        displayName: 'Lucas Fernandes',
+        avatarUrl: 'https://lh3.googleusercontent.com/a/avatar',
+        createdAt: expect.any(String),
       });
     });
 
-    it('returns the same error for a wrong password and an unknown email', async () => {
-      const wrongPassword = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: validRegistration.email, password: 'wrong-password' })
-        .expect(401);
+    it('signs an existing account back in and refreshes its profile', async () => {
+      const first = await signInWithGoogle();
+      const firstUser = await first.agent.get('/auth/me').expect(200);
 
-      const unknownEmail = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: 'nobody@gametrack.dev', password: 'wrong-password' })
-        .expect(401);
+      googleOAuthClient.fetchProfile.mockResolvedValue({
+        ...googleProfile,
+        displayName: 'Lucas F.',
+      });
+      const second = await signInWithGoogle();
+      const secondUser = await second.agent.get('/auth/me').expect(200);
 
-      expect(wrongPassword.body.message).toBe('Invalid email or password');
-      expect(unknownEmail.body.message).toBe('Invalid email or password');
-      expect(getSessionCookie(wrongPassword)).toBeUndefined();
+      expect(secondUser.body).toMatchObject({
+        id: firstUser.body.id,
+        username: 'lucas_fernandes',
+        displayName: 'Lucas F.',
+      });
+      await expect(prisma.user.count()).resolves.toBe(1);
+    });
+
+    it('picks another username when the generated one is taken', async () => {
+      await prisma.user.create({
+        data: {
+          googleId: 'someone-else',
+          email: 'other@gmail.com',
+          username: 'lucas_fernandes',
+        },
+      });
+
+      const { agent } = await signInWithGoogle();
+
+      const me = await agent.get('/auth/me').expect(200);
+      expect(me.body.username).toMatch(/^lucas_fernandes_\d{4}$/);
+    });
+
+    it('rejects a callback whose state does not match the sign-in attempt', async () => {
+      const { agent, callbackResponse } = await signInWithGoogle({
+        code: 'authorization-code',
+        state: 'forged-state',
+      });
+
+      expect(callbackResponse.headers['location']).toBe(
+        `${FRONTEND_URL}/login?error=invalid_state`,
+      );
+      expect(getCookie(callbackResponse, 'gametrack_session')).toBeUndefined();
+      expect(googleOAuthClient.fetchProfile).not.toHaveBeenCalled();
+      await agent.get('/auth/me').expect(401);
+    });
+
+    it('rejects a callback that was not started by this browser', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/auth/google/callback')
+        .query({ code: 'authorization-code', state: GOOGLE_STATE })
+        .expect(302);
+
+      expect(response.headers['location']).toBe(
+        `${FRONTEND_URL}/login?error=invalid_state`,
+      );
+    });
+
+    it('does not create accounts for unverified Google emails', async () => {
+      googleOAuthClient.fetchProfile.mockResolvedValue({
+        ...googleProfile,
+        emailVerified: false,
+      });
+
+      const { callbackResponse } = await signInWithGoogle();
+
+      expect(callbackResponse.headers['location']).toBe(
+        `${FRONTEND_URL}/login?error=email_not_verified`,
+      );
+      await expect(prisma.user.count()).resolves.toBe(0);
+    });
+
+    it('returns to the login page when the user cancels on Google', async () => {
+      const { callbackResponse } = await signInWithGoogle({
+        error: 'access_denied',
+        state: GOOGLE_STATE,
+      });
+
+      expect(callbackResponse.headers['location']).toBe(
+        `${FRONTEND_URL}/login?error=cancelled`,
+      );
     });
   });
 
@@ -162,8 +220,7 @@ describe('Auth (e2e)', () => {
 
   describe('POST /auth/logout', () => {
     it('clears the session cookie', async () => {
-      const agent = request.agent(app.getHttpServer());
-      await agent.post('/auth/register').send(validRegistration).expect(201);
+      const { agent } = await signInWithGoogle();
       await agent.get('/auth/me').expect(200);
 
       await agent.post('/auth/logout').expect(204);
@@ -177,23 +234,26 @@ describe('Auth rate limiting (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
-    app = await createTestApp({ enableThrottling: true });
+    app = await createTestApp({
+      enableThrottling: true,
+      providerOverrides: [
+        {
+          provide: GoogleOAuthClient,
+          useValue: createFakeGoogleOAuthClient(),
+        },
+      ],
+    });
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it('blocks repeated login attempts from the same client', async () => {
-    const attempt = () =>
-      request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: 'nobody@gametrack.dev', password: 'guessing' });
-
+  it('blocks repeated sign-in attempts from the same client', async () => {
     for (let attemptNumber = 1; attemptNumber <= 10; attemptNumber++) {
-      await attempt().expect(401);
+      await request(app.getHttpServer()).get('/auth/google').expect(302);
     }
 
-    await attempt().expect(429);
+    await request(app.getHttpServer()).get('/auth/google').expect(429);
   });
 });

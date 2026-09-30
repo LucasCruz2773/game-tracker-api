@@ -3,12 +3,19 @@ import {
   IsEnum,
   IsInt,
   IsString,
+  IsUrl,
   Matches,
   Max,
   Min,
   MinLength,
   validateSync,
 } from 'class-validator';
+
+const LOCAL_URL_OPTIONS = {
+  protocols: ['http', 'https'],
+  require_protocol: true,
+  require_tld: false,
+};
 
 export enum NodeEnvironment {
   Development = 'development',
@@ -41,6 +48,20 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(1)
   RAWG_API_KEY: string;
+
+  @IsString()
+  @MinLength(1)
+  GOOGLE_CLIENT_ID: string;
+
+  @IsString()
+  @MinLength(1)
+  GOOGLE_CLIENT_SECRET: string;
+
+  @IsUrl(LOCAL_URL_OPTIONS)
+  GOOGLE_CALLBACK_URL: string;
+
+  @IsUrl(LOCAL_URL_OPTIONS)
+  FRONTEND_URL: string;
 }
 
 export function validateEnvironment(

@@ -1,54 +1,93 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
+import { timingSafeEqual } from 'node:crypto';
 import type { User } from '../generated/prisma/client.js';
 import { UsersService } from '../users/users.service.js';
 import type { SessionTokenPayload } from './auth.types.js';
-import type { LoginDto } from './dto/login.dto.js';
-import type { RegisterDto } from './dto/register.dto.js';
+import {
+  GoogleOAuthClient,
+  type GoogleAuthorizationRequest,
+  type GoogleProfile,
+} from './google/google-oauth.client.js';
+import { GoogleSignInError } from './google/google-sign-in.error.js';
 
 export interface AuthSession {
   user: User;
   accessToken: string;
 }
 
+export interface GoogleCallbackParams {
+  code?: string;
+  state?: string;
+  /** Set by Google when the user denies consent, e.g. "access_denied". */
+  providerError?: string;
+  /** Values stored in the sign-in cookie when the flow started. */
+  expectedState?: string;
+  codeVerifier?: string;
+}
+
 @Injectable()
 export class AuthService {
-  private dummyPasswordHash?: Promise<string>;
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly googleOAuthClient: GoogleOAuthClient,
   ) {}
 
-  async register(registerDto: RegisterDto): Promise<AuthSession> {
-    const passwordHash = await argon2.hash(registerDto.password);
-    const user = await this.usersService.create({
-      email: registerDto.email,
-      username: registerDto.username,
-      passwordHash,
-    });
-
-    return this.createSession(user);
+  startGoogleSignIn(): Promise<GoogleAuthorizationRequest> {
+    return this.googleOAuthClient.createAuthorizationRequest();
   }
 
-  async login(loginDto: LoginDto): Promise<AuthSession> {
-    const user = await this.usersService.findByEmail(loginDto.email);
+  async completeGoogleSignIn(
+    params: GoogleCallbackParams,
+  ): Promise<AuthSession> {
+    const { code, state, providerError, expectedState, codeVerifier } = params;
 
-    // Verify against a dummy hash for unknown emails so response time
-    // doesn't reveal which emails are registered.
-    const passwordHash =
-      user?.passwordHash ?? (await this.getDummyPasswordHash());
-    const isPasswordValid = await argon2.verify(
-      passwordHash,
-      loginDto.password,
-    );
-
-    if (!user || !isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+    if (providerError) {
+      throw new GoogleSignInError('cancelled');
     }
 
-    return this.createSession(user);
+    if (
+      !code ||
+      !state ||
+      !expectedState ||
+      !codeVerifier ||
+      !constantTimeEquals(state, expectedState)
+    ) {
+      throw new GoogleSignInError('invalid_state');
+    }
+
+    let profile: GoogleProfile;
+
+    try {
+      profile = await this.googleOAuthClient.fetchProfile(code, codeVerifier);
+    } catch (error) {
+      this.logger.warn(
+        `Google rejected the sign-in: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new GoogleSignInError('google_rejected');
+    }
+
+    if (!profile.emailVerified) {
+      throw new GoogleSignInError('email_not_verified');
+    }
+
+    try {
+      const user = await this.usersService.findOrCreateFromGoogle(profile);
+      return await this.createSession(user);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw new GoogleSignInError('account_conflict');
+      }
+      throw error;
+    }
   }
 
   async getCurrentUser(userId: string): Promise<User> {
@@ -67,9 +106,14 @@ export class AuthService {
 
     return { user, accessToken };
   }
+}
 
-  private getDummyPasswordHash(): Promise<string> {
-    this.dummyPasswordHash ??= argon2.hash('dummy-password-for-timing');
-    return this.dummyPasswordHash;
-  }
+function constantTimeEquals(received: string, expected: string): boolean {
+  const receivedBuffer = Buffer.from(received);
+  const expectedBuffer = Buffer.from(expected);
+
+  return (
+    receivedBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(receivedBuffer, expectedBuffer)
+  );
 }

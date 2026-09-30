@@ -5,6 +5,7 @@ import type { EnvironmentVariables } from '../config/environment.js';
 import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { GoogleOAuthClient } from './google/google-oauth.client.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 
 @Module({
@@ -27,7 +28,7 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
+  providers: [AuthService, GoogleOAuthClient, JwtAuthGuard],
   exports: [JwtModule, JwtAuthGuard],
 })
 export class AuthModule {}

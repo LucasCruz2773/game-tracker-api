@@ -5,11 +5,17 @@ export class UserResponseDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ example: 'player@gametrack.dev' })
+  @ApiProperty({ example: 'player@gmail.com' })
   email: string;
 
-  @ApiProperty({ example: 'player_one' })
+  @ApiProperty({ example: 'lucas_fernandes' })
   username: string;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Lucas Fernandes' })
+  displayName: string | null;
+
+  @ApiProperty({ type: String, nullable: true, format: 'uri' })
+  avatarUrl: string | null;
 
   @ApiProperty()
   createdAt: Date;
@@ -19,6 +25,8 @@ export class UserResponseDto {
       id: user.id,
       email: user.email,
       username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
       createdAt: user.createdAt,
     };
   }

@@ -17,14 +17,17 @@ enum LibraryStatus {
 }
 
 model User {
-  id           String   @id @default(uuid(7)) @db.Uuid
-  /// Stored lowercased; normalized by the application before persisting.
-  email        String   @unique
+  id          String   @id @default(uuid(7)) @db.Uuid
+  /// Google account identifier (the ID token `sub` claim). Never changes for an account.
+  googleId    String   @unique @map("google_id")
+  /// Verified email from Google, stored lowercased.
+  email       String   @unique
   /// Stored lowercased; used for the public profile URL.
-  username     String   @unique
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  username    String   @unique
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   libraryEntries GameLibrary[]
   reviews        Review[]
