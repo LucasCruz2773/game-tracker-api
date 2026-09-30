@@ -27,11 +27,19 @@ describe('RawgClient', () => {
       },
     );
 
-    const configService = {
-      get: () => API_KEY,
-    } as unknown as ConfigService<EnvironmentVariables, true>;
-    rawgClient = new RawgClient(configService);
+    rawgClient = createClient('https://api.rawg.io/api');
   });
+
+  function createClient(baseUrl: string): RawgClient {
+    const settings: Partial<EnvironmentVariables> = {
+      RAWG_API_KEY: API_KEY,
+      RAWG_BASE_URL: baseUrl,
+    };
+    const configService = {
+      get: (name: keyof EnvironmentVariables) => settings[name],
+    } as unknown as ConfigService<EnvironmentVariables, true>;
+    return new RawgClient(configService);
+  }
 
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -51,6 +59,19 @@ describe('RawgClient', () => {
       page: '2',
       page_size: '10',
     });
+  });
+
+  it('can be pointed at another catalog server', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ count: 0, results: [] }));
+
+    await createClient('http://localhost:3200/').searchGames({
+      page: 1,
+      pageSize: 10,
+    });
+
+    const requestedUrl = fetchMock.mock.calls[0][0] as URL;
+    expect(requestedUrl.origin).toBe('http://localhost:3200');
+    expect(requestedUrl.pathname).toBe('/games');
   });
 
   it('returns an empty page when RAWG answers 404 for a page out of range', async () => {

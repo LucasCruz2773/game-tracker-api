@@ -49,6 +49,10 @@ export class EnvironmentVariables {
   @MinLength(1)
   RAWG_API_KEY: string;
 
+  /** Overridden only to point the e2e suite at a fake catalog. */
+  @IsUrl(LOCAL_URL_OPTIONS)
+  RAWG_BASE_URL: string = 'https://api.rawg.io/api';
+
   @IsString()
   @MinLength(1)
   GOOGLE_CLIENT_ID: string;

@@ -18,7 +18,6 @@ import type {
   RawgPaginatedResponse,
 } from './rawg.types.js';
 
-const RAWG_BASE_URL = 'https://api.rawg.io/api';
 const REQUEST_TIMEOUT_MS = 5_000;
 
 export interface SearchCatalogParams {
@@ -37,9 +36,13 @@ export class CatalogUnavailableException extends BadGatewayException {
 export class RawgClient {
   private readonly logger = new Logger(RawgClient.name);
   private readonly apiKey: string;
+  private readonly baseUrl: string;
 
   constructor(configService: ConfigService<EnvironmentVariables, true>) {
     this.apiKey = configService.get('RAWG_API_KEY', { infer: true });
+    this.baseUrl = configService
+      .get('RAWG_BASE_URL', { infer: true })
+      .replace(/\/+$/, '');
   }
 
   async searchGames(params: SearchCatalogParams): Promise<CatalogSearchResult> {
@@ -86,7 +89,7 @@ export class RawgClient {
     path: string,
     query: Record<string, string | undefined> = {},
   ): Promise<Response> {
-    const url = new URL(`${RAWG_BASE_URL}${path}`);
+    const url = new URL(`${this.baseUrl}${path}`);
     url.searchParams.set('key', this.apiKey);
 
     for (const [name, value] of Object.entries(query)) {
