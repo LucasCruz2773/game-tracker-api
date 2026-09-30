@@ -1,0 +1,26 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsIn, IsOptional } from 'class-validator';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
+import { LibraryStatus } from '../../generated/prisma/client.js';
+
+export const LIBRARY_SORT_FIELDS = ['updatedAt', 'createdAt', 'title'] as const;
+export type LibrarySortField = (typeof LIBRARY_SORT_FIELDS)[number];
+
+export class ListLibraryQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: LibraryStatus })
+  @IsOptional()
+  @IsEnum(LibraryStatus)
+  status?: LibraryStatus;
+
+  @ApiPropertyOptional({ enum: LIBRARY_SORT_FIELDS, default: 'updatedAt' })
+  @IsIn(LIBRARY_SORT_FIELDS)
+  sortBy: LibrarySortField = 'updatedAt';
+
+  @ApiPropertyOptional({
+    enum: ['asc', 'desc'],
+    description: 'Defaults to asc for title and desc for dates',
+  })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc';
+}
