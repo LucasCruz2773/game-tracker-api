@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { isUUID } from 'class-validator';
 import type { Request } from 'express';
 import { SESSION_COOKIE_NAME } from './auth.constants.js';
 import type {
@@ -24,14 +25,18 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
+    let payload: Partial<SessionTokenPayload>;
     try {
-      const payload =
-        await this.jwtService.verifyAsync<SessionTokenPayload>(token);
-      (request as AuthenticatedRequest).user = { id: payload.sub };
+      payload = await this.jwtService.verifyAsync<SessionTokenPayload>(token);
     } catch {
       throw new UnauthorizedException();
     }
 
+    if (typeof payload.sub !== 'string' || !isUUID(payload.sub)) {
+      throw new UnauthorizedException();
+    }
+
+    (request as AuthenticatedRequest).user = { id: payload.sub };
     return true;
   }
 }

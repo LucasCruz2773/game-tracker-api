@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import {
@@ -214,6 +215,18 @@ describe('Auth (e2e)', () => {
       return request(app.getHttpServer())
         .get('/auth/me')
         .set('Cookie', 'gametrack_session=eyJhbGciOiJIUzI1NiJ9.e30.invalid')
+        .expect(401);
+    });
+
+    it.each([
+      ['without a subject', {}],
+      ['with a malformed subject', { sub: 'not-a-uuid' }],
+    ])('rejects a signed session token %s', async (_case, payload) => {
+      const token = await app.get(JwtService).signAsync(payload);
+
+      await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Cookie', `gametrack_session=${token}`)
         .expect(401);
     });
   });
