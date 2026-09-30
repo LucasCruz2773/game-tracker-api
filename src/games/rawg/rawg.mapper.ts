@@ -1,3 +1,4 @@
+import { ISO_DATE_PATTERN, parseIsoDate } from '../../common/dates.js';
 import type {
   CatalogGame,
   CatalogGameDetails,
@@ -8,8 +9,6 @@ import type {
   RawgGameDetails,
   RawgNamedResource,
 } from './rawg.types.js';
-
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Returns null for entries missing the fields GameTrack depends on. */
 export function toCatalogGame(rawgGame: RawgGame): CatalogGame | null {
@@ -55,7 +54,7 @@ function parseReleaseDate(released: string | null): Date | null {
     return null;
   }
 
-  const releaseDate = new Date(`${released}T00:00:00.000Z`);
+  const releaseDate = parseIsoDate(released);
   return Number.isNaN(releaseDate.getTime()) ? null : releaseDate;
 }
 

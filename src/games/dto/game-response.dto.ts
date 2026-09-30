@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { toIsoDate } from '../../common/dates.js';
 import type { GameWithTags } from '../game.include.js';
 
 export class GameTagDto {
@@ -42,7 +43,7 @@ export class GameSummaryDto {
       slug: game.slug,
       title: game.title,
       coverUrl: game.coverUrl,
-      releaseDate: game.releaseDate?.toISOString().slice(0, 10) ?? null,
+      releaseDate: toIsoDate(game.releaseDate),
       genres: game.genres.map(({ name, slug }) => ({ name, slug })),
       platforms: game.platforms.map(({ name, slug }) => ({ name, slug })),
     };
