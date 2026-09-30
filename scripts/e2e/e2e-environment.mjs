@@ -12,7 +12,7 @@ export function loadE2eEnvironment() {
     process.loadEnvFile(ENV_FILE);
   }
 
-  const frontendUrl = process.env.E2E_FRONTEND_URL ?? 'http://localhost:5174';
+  const frontendUrl = process.env.E2E_FRONTEND_URL ?? 'http://localhost:5199';
   const port = process.env.E2E_API_PORT ?? '3100';
 
   return {
