@@ -114,6 +114,27 @@ describe('Games (e2e)', () => {
       await expect(prisma.game.count()).resolves.toBe(1);
     });
 
+    it('stores each game once when concurrent searches return it', async () => {
+      rawgClient.searchGames
+        .mockResolvedValueOnce({ total: 2, games: [celeste, hollowKnight] })
+        .mockResolvedValueOnce({ total: 2, games: [hollowKnight, celeste] })
+        .mockResolvedValue({ total: 2, games: [celeste, hollowKnight] });
+
+      const responses = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          request(app.getHttpServer()).get('/games'),
+        ),
+      );
+
+      expect(responses.map((response) => response.status)).toEqual(
+        Array(6).fill(200),
+      );
+      expect(
+        responses[1].body.items.map((game: { title: string }) => game.title),
+      ).toEqual(['Hollow Knight', 'Celeste']);
+      await expect(prisma.game.count()).resolves.toBe(2);
+    });
+
     it('validates pagination parameters', async () => {
       await request(app.getHttpServer())
         .get('/games')

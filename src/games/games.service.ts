@@ -103,17 +103,27 @@ export class GamesService {
 
     await this.saveTags(catalogGames);
 
-    return this.prisma.$transaction(
-      catalogGames.map((catalogGame) =>
-        this.prisma.game.upsert({
+    // An upsert checks and inserts in separate steps, so concurrent searches
+    // returning the same game collided on rawg_id. Insert with ON CONFLICT DO
+    // NOTHING instead, then refresh every game.
+    await this.prisma.game.createMany({
+      data: catalogGames.map((catalogGame) => ({
+        rawgId: catalogGame.rawgId,
+        ...toGameFields(catalogGame),
+      })),
+      skipDuplicates: true,
+    });
+
+    // Updating in rawg_id order makes concurrent transactions lock rows in the
+    // same order, so they wait for each other instead of deadlocking.
+    const gamesInLockOrder = [...catalogGames].sort(
+      (left, right) => left.rawgId - right.rawgId,
+    );
+    const savedGames = await this.prisma.$transaction(
+      gamesInLockOrder.map((catalogGame) =>
+        this.prisma.game.update({
           where: { rawgId: catalogGame.rawgId },
-          create: {
-            rawgId: catalogGame.rawgId,
-            ...toGameFields(catalogGame),
-            genres: { connect: toSlugReferences(catalogGame.genres) },
-            platforms: { connect: toSlugReferences(catalogGame.platforms) },
-          },
-          update: {
+          data: {
             ...toGameFields(catalogGame),
             genres: { set: toSlugReferences(catalogGame.genres) },
             platforms: { set: toSlugReferences(catalogGame.platforms) },
@@ -121,6 +131,13 @@ export class GamesService {
           include: gameWithTagsInclude,
         }),
       ),
+    );
+
+    const savedByRawgId = new Map(
+      savedGames.map((game) => [game.rawgId, game]),
+    );
+    return catalogGames.map((catalogGame) =>
+      savedByRawgId.get(catalogGame.rawgId)!,
     );
   }
 
