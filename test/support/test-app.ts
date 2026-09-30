@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, type Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { App } from 'supertest/types.js';
@@ -6,9 +6,15 @@ import { AppModule } from '../../src/app.module.js';
 import { configureApp } from '../../src/app.setup.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 
+interface ProviderOverride {
+  provide: Type;
+  useValue: unknown;
+}
+
 interface TestAppOptions {
-  /** Rate limiting is disabled by default so tests can call auth routes freely. */
+  /** Rate limiting is disabled by default so tests can call routes freely. */
   enableThrottling?: boolean;
+  providerOverrides?: ProviderOverride[];
 }
 
 export async function createTestApp(
@@ -20,6 +26,12 @@ export async function createTestApp(
     moduleBuilder
       .overrideGuard(ThrottlerGuard)
       .useValue({ canActivate: () => true });
+  }
+
+  for (const override of options.providerOverrides ?? []) {
+    moduleBuilder
+      .overrideProvider(override.provide)
+      .useValue(override.useValue);
   }
 
   const moduleFixture = await moduleBuilder.compile();

@@ -37,6 +37,10 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(60)
   JWT_EXPIRES_IN_SECONDS: number = 604800;
+
+  @IsString()
+  @MinLength(1)
+  RAWG_API_KEY: string;
 }
 
 export function validateEnvironment(

@@ -33,16 +33,19 @@ model User {
 }
 
 model Game {
-  id          String    @id @default(uuid(7)) @db.Uuid
+  id              String    @id @default(uuid(7)) @db.Uuid
   /// Identifier of the game in the RAWG catalog.
-  rawgId      Int       @unique @map("rawg_id")
-  slug        String    @unique
-  title       String
-  description String?
-  coverUrl    String?   @map("cover_url")
-  releaseDate DateTime? @map("release_date") @db.Date
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rawgId          Int       @unique @map("rawg_id")
+  slug            String    @unique
+  title           String
+  description     String?
+  coverUrl        String?   @map("cover_url")
+  releaseDate     DateTime? @map("release_date") @db.Date
+  /// When full details (e.g. description) were last fetched from RAWG.
+  /// Search results only carry summary data, so this stays null until the game is opened.
+  detailsSyncedAt DateTime? @map("details_synced_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   genres         Genre[]
   platforms      Platform[]

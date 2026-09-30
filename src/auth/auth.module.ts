@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { ThrottlerModule } from '@nestjs/throttler';
 import type { EnvironmentVariables } from '../config/environment.js';
 import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
@@ -25,9 +24,6 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
         },
         verifyOptions: { algorithms: ['HS256'] },
       }),
-    }),
-    ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60_000, limit: 10 }],
     }),
   ],
   controllers: [AuthController],
