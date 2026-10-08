@@ -7,6 +7,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { GamesModule } from './games/games.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LibraryModule } from './library/library.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { LibraryModule } from './library/library.module.js';
     AuthModule,
     GamesModule,
     LibraryModule,
+    ReviewsModule,
   ],
 })
 export class AppModule {}
