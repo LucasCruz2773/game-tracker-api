@@ -33,6 +33,7 @@ import {
   LibraryListResponseDto,
 } from './dto/library-entry-response.dto.js';
 import { ListLibraryQueryDto } from './dto/list-library-query.dto.js';
+import { LibraryStatsDto } from './dto/library-stats.dto.js';
 import { UpdateLibraryEntryDto } from './dto/update-library-entry.dto.js';
 import { LibraryService } from './library.service.js';
 
@@ -52,6 +53,12 @@ export class LibraryController {
     @Query() query: ListLibraryQueryDto,
   ): Promise<LibraryListResponseDto> {
     return this.libraryService.list(user.id, query);
+  }
+
+  @Get('stats')
+  @ApiOkResponse({ type: LibraryStatsDto })
+  stats(@CurrentUser() user: AuthenticatedUser): Promise<LibraryStatsDto> {
+    return this.libraryService.getStats(user.id);
   }
 
   @Get(':gameId')

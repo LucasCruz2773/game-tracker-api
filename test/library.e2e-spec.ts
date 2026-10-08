@@ -229,6 +229,55 @@ describe('Library (e2e)', () => {
     });
   });
 
+  describe('GET /library/stats', () => {
+    it('returns zeros when the library is empty', async () => {
+      const response = await asPlayer().get('/library/stats').expect(200);
+
+      expect(response.body).toEqual({
+        totalGames: 0,
+        byStatus: { PLAYING: 0, BACKLOG: 0, COMPLETED: 0, DROPPED: 0 },
+        totalHoursPlayed: 0,
+        averageRating: null,
+        averageStarRating: null,
+      });
+    });
+
+    it('aggregates library entries and review ratings', async () => {
+      await addToLibrary(celeste, {
+        status: 'PLAYING',
+        hoursPlayed: 10,
+      }).expect(201);
+      await addToLibrary(hades, {
+        status: 'COMPLETED',
+        hoursPlayed: 25,
+      }).expect(201);
+      await addToLibrary(portal, { status: 'BACKLOG' }).expect(201);
+
+      await asPlayer()
+        .post(`/games/${celeste.id}/reviews`)
+        .send({ rating: 8 })
+        .expect(201);
+      await asPlayer()
+        .post(`/games/${hades.id}/reviews`)
+        .send({ rating: 10 })
+        .expect(201);
+
+      const response = await asPlayer().get('/library/stats').expect(200);
+
+      expect(response.body).toEqual({
+        totalGames: 3,
+        byStatus: { PLAYING: 1, BACKLOG: 1, COMPLETED: 1, DROPPED: 0 },
+        totalHoursPlayed: 35,
+        averageRating: 9,
+        averageStarRating: 4.5,
+      });
+    });
+
+    it('requires a session', async () => {
+      await request(app.getHttpServer()).get('/library/stats').expect(401);
+    });
+  });
+
   describe('isolation between users', () => {
     it("never exposes or changes another player's library", async () => {
       await addToLibrary(celeste, { status: 'PLAYING' }).expect(201);

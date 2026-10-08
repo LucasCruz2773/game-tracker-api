@@ -12,6 +12,10 @@ import {
   type LibraryListResponseDto,
 } from './dto/library-entry-response.dto.js';
 import type { ListLibraryQueryDto } from './dto/list-library-query.dto.js';
+import {
+  emptyStatusCounts,
+  type LibraryStatsDto,
+} from './dto/library-stats.dto.js';
 import type { UpdateLibraryEntryDto } from './dto/update-library-entry.dto.js';
 import {
   resolveLibraryProgress,
@@ -27,6 +31,42 @@ const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 @Injectable()
 export class LibraryService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getStats(userId: string): Promise<LibraryStatsDto> {
+    const [statusGroups, libraryTotals, reviewAverage] = await Promise.all([
+      this.prisma.gameLibrary.groupBy({
+        by: ['status'],
+        where: { userId },
+        _count: { _all: true },
+      }),
+      this.prisma.gameLibrary.aggregate({
+        where: { userId },
+        _sum: { hoursPlayed: true },
+        _count: { _all: true },
+      }),
+      this.prisma.review.aggregate({
+        where: { userId },
+        _avg: { rating: true },
+      }),
+    ]);
+
+    const byStatus = emptyStatusCounts();
+    for (const group of statusGroups) {
+      byStatus[group.status] = group._count._all;
+    }
+
+    const averageRating = toNullableNumber(reviewAverage._avg.rating);
+
+    return {
+      totalGames: libraryTotals._count._all,
+      byStatus,
+      totalHoursPlayed: libraryTotals._sum.hoursPlayed ?? 0,
+      averageRating:
+        averageRating === null ? null : roundToOneDecimal(averageRating),
+      averageStarRating:
+        averageRating === null ? null : roundToOneDecimal(averageRating / 2),
+    };
+  }
 
   async list(
     userId: string,
@@ -186,4 +226,12 @@ function toOptionalDate(
   return isoDate === undefined || isoDate === null
     ? isoDate
     : parseIsoDate(isoDate);
+}
+
+function toNullableNumber(value: number | null | undefined): number | null {
+  return value === null || value === undefined ? null : value;
+}
+
+function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
 }
