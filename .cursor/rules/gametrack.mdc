@@ -1,0 +1,42 @@
+---
+description: GameTrack API project context and development rules
+alwaysApply: true
+---
+
+# GameTrack API
+
+This repository contains the NestJS backend for GameTrack. Its sibling
+frontend is maintained independently at:
+https://github.com/LucasCruz2773/game-tracker-web
+
+Use Node.js 24. Do not downgrade it or change the configured engine/version
+unless explicitly requested.
+
+## Architecture
+
+- NestJS, TypeScript, PostgreSQL and Prisma
+- REST API with Swagger/OpenAPI
+- Google OAuth and JWT session in an httpOnly cookie
+- Domain modules: auth, users, games, library and reviews
+- Controllers handle HTTP concerns; services contain business logic
+- Validate all external input and never expose secrets or token data
+- The API is the integration layer for external game providers such as RAWG
+
+The OpenAPI document is the source of truth for the frontend contract. Avoid
+breaking response or endpoint changes. When one is necessary, coordinate it
+with a corresponding branch and pull request in the web repository.
+
+## Development
+
+- Build incrementally; do not add future infrastructure without a concrete use
+- Preserve strict typing and avoid `any`
+- Add meaningful unit/integration tests for business rules
+- Do not rewrite unrelated code
+- Keep `.env` untracked and document configuration in `.env.example`
+- Before adding a dependency, confirm current stable support for Node.js 24
+
+Use small Conventional Commits, for example `feat(library): add status filter`.
+Run Git commands in this repository, not in the parent workspace.
+
+Current priority: keep the existing MVP production-ready before adding social,
+queue, recommendation or AI features.

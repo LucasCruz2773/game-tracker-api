@@ -1,6 +1,8 @@
 # GameTrack API
 
-Backend REST da aplicação GameTrack. Documentação geral do projeto: [README na raiz](../README.md).
+Backend REST da aplicação GameTrack.
+
+Frontend: [game-tracker-web](https://github.com/LucasCruz2773/game-tracker-web).
 
 ## Stack
 
@@ -113,3 +115,22 @@ npm run e2e:session -- <username> "<Display Name>"
 2. Defina `NODE_ENV=production` (Swagger fica desabilitado)
 3. Configure secrets, `DATABASE_URL` e URLs de OAuth para o domínio real
 4. `npm run start:prod`
+
+Ao publicar API e frontend em origens diferentes, revise CORS e os atributos do
+cookie (`Secure`, `SameSite` e domínio). Cadastre a URL pública exata do callback
+no Google OAuth e mantenha os segredos somente no ambiente da API.
+
+## Desenvolvimento full-stack
+
+Este é um repositório independente. Para trabalhar nos dois apps localmente,
+mantenha os clones como pastas irmãs:
+
+```text
+game-tracker/
+├── game-tracker-api/
+└── game-tracker-web/
+```
+
+Mudanças que alterem o contrato HTTP devem ter branches correspondentes e PRs
+com links cruzados nos dois repositórios. O Swagger/OpenAPI da API é a fonte de
+verdade do contrato.
