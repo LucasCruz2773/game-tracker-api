@@ -1,25 +1,89 @@
 # GameTrack API
 
-Backend REST da aplicação GameTrack.
+[![CI](https://github.com/LucasCruz2773/game-tracker-api/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasCruz2773/game-tracker-api/actions/workflows/ci.yml)
 
-Frontend: [game-tracker-web](https://github.com/LucasCruz2773/game-tracker-web).
+API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma biblioteca pessoal, registrar progresso, publicar reviews e acompanhar estatísticas.
+
+- Aplicação: https://game-tracker-web-two.vercel.app
+- Health check: https://game-tracker-api-68q1.onrender.com/health
+- Frontend: [LucasCruz2773/game-tracker-web](https://github.com/LucasCruz2773/game-tracker-web)
+
+> A API utiliza uma instância gratuita do Render. A primeira requisição após um período de inatividade pode levar alguns segundos.
+
+## Funcionalidades
+
+- Autenticação com Google OAuth 2.0 e PKCE.
+- Sessão JWT armazenada em cookie `httpOnly`.
+- Busca e detalhes de jogos pelo catálogo RAWG.
+- Cache local dos jogos consultados.
+- Biblioteca com status, horas jogadas e datas de início e conclusão.
+- Reviews com notas de 0,5 a 5 estrelas.
+- Estatísticas agregadas para o dashboard.
+- Paginação, filtros, ordenação e validação de entrada.
+- Rate limiting, tratamento consistente de erros e health check.
 
 ## Stack
 
-- NestJS 12 + TypeScript
-- PostgreSQL 18 (Docker)
-- Prisma 7
-- JWT em cookie httpOnly
-- Google OAuth 2.0 (PKCE)
-- Integração com catálogo [RAWG](https://rawg.io/apidocs)
-- Swagger em `/docs` (desenvolvimento)
+- Node.js 24, TypeScript e NestJS 12
+- PostgreSQL e Prisma 7
+- Google OAuth 2.0, JWT e cookies seguros
+- Swagger/OpenAPI
+- Vitest e Supertest
+- Oxlint e Prettier
+- Neon em produção e PostgreSQL via Docker no desenvolvimento
+- Render para hospedagem
 
-## Requisitos
+## Arquitetura
 
-- Node.js **24** (`nvm use` lê `.nvmrc`)
+```mermaid
+flowchart LR
+  Browser["React na Vercel"]
+  Proxy["Proxy /api da Vercel"]
+  API["NestJS no Render"]
+  Google["Google OAuth"]
+  RAWG["RAWG API"]
+  DB[("PostgreSQL no Neon")]
+
+  Browser --> Proxy --> API
+  API <--> Google
+  API --> RAWG
+  API --> DB
+```
+
+O navegador acessa a API por `/api` no mesmo domínio do frontend. A Vercel encaminha as requisições ao Render, mantendo o fluxo de cookies simples e evitando expor credenciais de serviços externos no cliente.
+
+### Decisões técnicas
+
+- A API é a única camada que conversa com RAWG e PostgreSQL.
+- O primeiro login com Google cria o usuário automaticamente; não há senha local.
+- Jogos retornados pela RAWG são persistidos e seus detalhes são atualizados sob demanda.
+- Restrições do banco impedem jogos duplicados na biblioteca e mais de uma review do mesmo usuário por jogo.
+- O contrato HTTP é documentado com OpenAPI e tratado como fonte de verdade para o frontend.
+
+## Modelo de dados
+
+```mermaid
+erDiagram
+  USER ||--o{ GAME_LIBRARY : possui
+  GAME ||--o{ GAME_LIBRARY : integra
+  USER ||--o{ REVIEW : escreve
+  GAME ||--o{ REVIEW : recebe
+  GAME }o--o{ GENRE : classificado
+  GAME }o--o{ PLATFORM : disponivel
+```
+
+Entidades principais: `User`, `Game`, `GameLibrary`, `Review`, `Genre` e `Platform`. O schema completo está em [`prisma/schema.prisma`](./prisma/schema.prisma).
+
+## Executando localmente
+
+### Requisitos
+
+- Node.js **24**
 - Docker
+- Chave da [RAWG API](https://rawg.io/apidocs)
+- Cliente OAuth do tipo **Web application** no Google Cloud
 
-## Setup
+### Instalação
 
 ```bash
 cp .env.example .env
@@ -29,101 +93,81 @@ npm run db:migrate
 npm run start:dev
 ```
 
-Servidor em `http://localhost:3000`.
+A API ficará disponível em `http://localhost:3000`:
 
-### Variáveis de ambiente
+- Swagger: `http://localhost:3000/docs`
+- Health: `http://localhost:3000/health`
 
-Veja [`.env.example`](./.env.example). Principais:
-
-- `DATABASE_URL` — deve bater com `POSTGRES_*` do Docker Compose
-- `JWT_SECRET` — gere com: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
-- `RAWG_API_KEY`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`
-- `FRONTEND_URL` — redirect pós-login
-
-### Banco de dados
-
-```bash
-npm run db:up       # sobe Postgres
-npm run db:down     # para o container
-npm run db:migrate  # aplica migrations
-npm run db:studio   # Prisma Studio
-```
-
-## Scripts
-
-| Comando | Descrição |
-| --- | --- |
-| `npm run start:dev` | API com hot reload |
-| `npm run build` | Build de produção |
-| `npm run start:prod` | Roda `dist/main.js` |
-| `npm run test` | Testes unitários |
-| `npm run test:e2e` | Testes de integração (API + Postgres) |
-| `npm run lint` | Oxlint |
-
-## Módulos
+Configure no Google Cloud a URI de redirecionamento informada em `GOOGLE_CALLBACK_URL`. No ambiente local, o valor padrão é:
 
 ```text
-src/
-├── auth/       # Google OAuth, JWT, guards
-├── users/
-├── games/      # busca e detalhes (RAWG + cache local)
-├── library/    # biblioteca do usuário
-├── reviews/
-├── health/
-└── common/
+http://localhost:3000/auth/google/callback
 ```
 
-## Endpoints
+## Variáveis de ambiente
 
-| Módulo | Rotas |
-| --- | --- |
-| Health | `GET /health` |
-| Auth | `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/me`, `POST /auth/logout` |
-| Games | `GET /games`, `GET /games/:id` |
-| Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats` |
+Use [`.env.example`](./.env.example) como referência. Não versione o arquivo `.env`.
+
+| Variável                 | Finalidade                                      |
+| ------------------------ | ----------------------------------------------- |
+| `DATABASE_URL`           | Conexão PostgreSQL usada pela aplicação         |
+| `DATABASE_URL_UNPOOLED`  | Conexão direta opcional para migrations no Neon |
+| `JWT_SECRET`             | Assinatura dos tokens de sessão                 |
+| `JWT_EXPIRES_IN_SECONDS` | Duração da sessão                               |
+| `RAWG_API_KEY`           | Credencial do catálogo RAWG                     |
+| `GOOGLE_CLIENT_ID`       | Identificador do cliente OAuth                  |
+| `GOOGLE_CLIENT_SECRET`   | Segredo do cliente OAuth                        |
+| `GOOGLE_CALLBACK_URL`    | Callback autorizado no Google Cloud             |
+| `FRONTEND_URL`           | Destino do navegador após a autenticação        |
+
+## Endpoints principais
+
+| Área    | Rotas                                                                                  |
+| ------- | -------------------------------------------------------------------------------------- |
+| Health  | `GET /health`                                                                          |
+| Auth    | `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/me`, `POST /auth/logout`   |
+| Games   | `GET /games`, `GET /games/:id`                                                         |
+| Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats`         |
 | Reviews | `GET/POST /games/:gameId/reviews`, `GET .../reviews/mine`, `PATCH/DELETE /reviews/:id` |
 
-Autenticação: cookie `gametrack_session` (httpOnly). Endpoints protegidos exigem sessão válida.
+Endpoints protegidos exigem o cookie de sessão `gametrack_session`. O Swagger fica habilitado apenas fora de produção.
 
-## Modelo de dados
-
-Entidades principais: `User`, `Game`, `GameLibrary`, `Review`, `Genre`, `Platform`.
-
-Status da biblioteca: `BACKLOG`, `PLAYING`, `COMPLETED`, `DROPPED`.
-
-Um usuário não pode ter o mesmo jogo duplicado na biblioteca (`unique userId + gameId`). Reviews: uma por usuário por jogo, nota 1–10 (meias estrelas de 0,5 a 5).
-
-Schema: [`prisma/schema.prisma`](./prisma/schema.prisma).
-
-## Testes e2e da API
+## Qualidade e testes
 
 ```bash
+npm run lint
+npm test
 npm run test:e2e
+npm run build
 ```
 
-Usa banco de teste separado. Para servir a API compilada em cenários e2e do frontend:
+- Testes unitários cobrem regras de domínio, autenticação, integração RAWG e tratamento de erros.
+- Testes de integração exercitam autenticação, catálogo, biblioteca, reviews e health check contra um banco separado.
+- O GitHub Actions executa lint, testes unitários e build em pushes para `main` e pull requests.
 
-```bash
-npm run e2e:serve
-npm run e2e:session -- <username> "<Display Name>"
-```
+## Scripts úteis
 
-## Produção
+| Comando                     | Descrição                                   |
+| --------------------------- | ------------------------------------------- |
+| `npm run start:dev`         | Inicia a API com hot reload                 |
+| `npm run build`             | Gera o build de produção                    |
+| `npm run start:prod`        | Executa `dist/main.js`                      |
+| `npm run db:up` / `db:down` | Inicia ou encerra o PostgreSQL local        |
+| `npm run db:migrate`        | Cria e aplica migrations em desenvolvimento |
+| `npm run db:migrate:deploy` | Aplica migrations versionadas em produção   |
+| `npm run db:studio`         | Abre o Prisma Studio                        |
 
-1. `npm run build`
-2. Defina `NODE_ENV=production` (Swagger fica desabilitado)
-3. Configure secrets, `DATABASE_URL` e URLs de OAuth para o domínio real
-4. `npm run start:prod`
+## Deploy
 
-Ao publicar API e frontend em origens diferentes, revise CORS e os atributos do
-cookie (`Secure`, `SameSite` e domínio). Cadastre a URL pública exata do callback
-no Google OAuth e mantenha os segredos somente no ambiente da API.
+- **API:** Render
+- **Banco:** Neon, branch `production`
+- **Frontend:** Vercel
+
+O build de produção instala as dependências, compila a aplicação e aplica as migrations versionadas. Segredos permanecem nas variáveis de ambiente do Render; o Swagger é desabilitado quando `NODE_ENV=production`.
 
 ## Desenvolvimento full-stack
 
-Este é um repositório independente. Para trabalhar nos dois apps localmente,
-mantenha os clones como pastas irmãs:
+Este é um repositório independente. Para executar os testes integrados com o frontend, mantenha os clones como pastas irmãs:
 
 ```text
 game-tracker/
@@ -131,6 +175,4 @@ game-tracker/
 └── game-tracker-web/
 ```
 
-Mudanças que alterem o contrato HTTP devem ter branches correspondentes e PRs
-com links cruzados nos dois repositórios. O Swagger/OpenAPI da API é a fonte de
-verdade do contrato.
+Mudanças no contrato HTTP devem ser coordenadas entre os dois repositórios, preferencialmente com branches correspondentes e pull requests vinculados.
