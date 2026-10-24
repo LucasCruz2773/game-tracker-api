@@ -210,16 +210,18 @@ export class SteamIntegrationService {
     input: ImportSteamGamesDto,
   ): Promise<SteamImportResultDto> {
     await this.requireAccount(userId);
-    const initialProgress = resolveLibraryProgress(
-      null,
-      { status: input.status ?? LibraryStatus.COMPLETED },
-      todayUtc(),
+    const appIds = input.games.map((game) => game.appId);
+    const statusByAppId = new Map(
+      input.games.map((game) => [
+        game.appId,
+        game.status ?? LibraryStatus.COMPLETED,
+      ]),
     );
     const steamGames = await this.prisma.steamGame.findMany({
-      where: { userId, steamAppId: { in: input.appIds } },
+      where: { userId, steamAppId: { in: appIds } },
     });
 
-    if (steamGames.length !== input.appIds.length) {
+    if (steamGames.length !== appIds.length) {
       throw new NotFoundException(
         'Sync your Steam library before importing these games',
       );
@@ -261,6 +263,16 @@ export class SteamIntegrationService {
           }
           return { kind: 'updated' as const };
         }
+
+        const initialProgress = resolveLibraryProgress(
+          null,
+          {
+            status:
+              statusByAppId.get(steamGame.steamAppId) ??
+              LibraryStatus.COMPLETED,
+          },
+          todayUtc(),
+        );
 
         await this.prisma.gameLibrary.create({
           data: {

@@ -21,6 +21,16 @@ const portal: CatalogGame = {
   platforms: [{ name: 'PC', slug: 'pc' }],
 };
 
+const halfLife: CatalogGame = {
+  rawgId: 12020,
+  slug: 'half-life-2',
+  title: 'Half-Life 2',
+  coverUrl: null,
+  releaseDate: new Date('2004-11-16T00:00:00.000Z'),
+  genres: [{ name: 'Shooter', slug: 'shooter' }],
+  platforms: [{ name: 'PC', slug: 'pc' }],
+};
+
 describe('Steam integration (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -95,7 +105,7 @@ describe('Steam integration (e2e)', () => {
   it('rejects an invalid import status', async () => {
     await asPlayer()
       .post('/integrations/steam/import')
-      .send({ appIds: [620], status: 'FINISHED' })
+      .send({ games: [{ appId: 620, status: 'FINISHED' }] })
       .expect(400);
   });
 
@@ -116,7 +126,7 @@ describe('Steam integration (e2e)', () => {
 
     const importResponse = await asPlayer()
       .post('/integrations/steam/import')
-      .send({ appIds: [620, 10] })
+      .send({ games: [{ appId: 620 }, { appId: 10 }] })
       .expect(200);
 
     expect(importResponse.body).toEqual({
@@ -146,11 +156,53 @@ describe('Steam integration (e2e)', () => {
     ).resolves.toMatchObject({ hoursPlayed: 5 });
   });
 
+  it('applies a different selected status to each imported game', async () => {
+    steamClient.getOwnedGames.mockResolvedValue([
+      { appId: 620, name: 'Portal 2', playtimeMinutes: 120 },
+      { appId: 220, name: 'Half-Life 2', playtimeMinutes: 180 },
+    ]);
+    rawgClient.searchGames.mockImplementation(
+      ({ search }: { search: string }) => {
+        const game = search === 'Portal 2' ? portal : halfLife;
+        return Promise.resolve({ total: 1, games: [game] });
+      },
+    );
+
+    await asPlayer().post('/integrations/steam/sync').expect(200);
+    await asPlayer()
+      .post('/integrations/steam/import')
+      .send({
+        games: [
+          { appId: 620, status: 'COMPLETED' },
+          { appId: 220, status: 'PLAYING' },
+        ],
+      })
+      .expect(200);
+
+    const entries = await prisma.gameLibrary.findMany({
+      where: { userId: player.user.id },
+      include: { game: true },
+      orderBy: { game: { title: 'asc' } },
+    });
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      status: 'PLAYING',
+      startedAt: expect.any(Date),
+      completedAt: null,
+      game: { title: 'Half-Life 2' },
+    });
+    expect(entries[1]).toMatchObject({
+      status: 'COMPLETED',
+      completedAt: expect.any(Date),
+      game: { title: 'Portal 2' },
+    });
+  });
+
   it('disconnects Steam without removing imported library games', async () => {
     await asPlayer().post('/integrations/steam/sync').expect(200);
     await asPlayer()
       .post('/integrations/steam/import')
-      .send({ appIds: [620], status: 'PLAYING' })
+      .send({ games: [{ appId: 620, status: 'PLAYING' }] })
       .expect(200);
 
     const importedEntry = await prisma.gameLibrary.findFirstOrThrow({

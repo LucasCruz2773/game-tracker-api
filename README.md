@@ -62,7 +62,7 @@ O navegador acessa a API por `/api` no mesmo domínio do frontend. A Vercel enca
 - A API é a única camada que conversa com RAWG e PostgreSQL.
 - O primeiro login com Google cria o usuário automaticamente; não há senha local.
 - A Steam é vinculada como integração; o Google continua sendo a identidade principal.
-- O status não é inferido pela Steam: o usuário o escolhe ao importar, com `COMPLETED` como padrão.
+- O status não é inferido pela Steam: o usuário o escolhe para cada jogo ao importar, com `COMPLETED` como padrão.
 - Jogos retornados pela RAWG são persistidos e seus detalhes são atualizados sob demanda.
 - Restrições do banco impedem jogos duplicados na biblioteca e mais de uma review do mesmo usuário por jogo.
 - O contrato HTTP é documentado com OpenAPI e tratado como fonte de verdade para o frontend.
