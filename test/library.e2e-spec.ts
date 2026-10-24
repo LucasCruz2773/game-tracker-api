@@ -75,6 +75,7 @@ describe('Library (e2e)', () => {
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
         game: expect.objectContaining({ id: celeste.id, title: 'Celeste' }),
+        review: null,
       });
     });
 
@@ -209,6 +210,35 @@ describe('Library (e2e)', () => {
       expect(firstPage.body.total).toBe(2);
       expect(firstPage.body.items[0].game.title).toBe('Celeste');
       expect(secondPage.body.items[0].game.title).toBe('Hades');
+    });
+
+    it("includes only the signed-in player's rating", async () => {
+      await asPlayer()
+        .post(`/games/${celeste.id}/reviews`)
+        .send({ rating: 9 })
+        .expect(201);
+      const rival = await createAuthenticatedUser(app, 'rating_rival');
+      await asPlayer(rival)
+        .post(`/games/${hades.id}/reviews`)
+        .send({ rating: 10 })
+        .expect(201);
+
+      const response = await asPlayer().get('/library').expect(200);
+      const byTitle = new Map(
+        response.body.items.map(
+          (entry: { game: { title: string }; review: unknown }) => [
+            entry.game.title,
+            entry.review,
+          ],
+        ),
+      );
+
+      expect(byTitle.get('Celeste')).toEqual({
+        id: expect.any(String),
+        rating: 9,
+        starRating: 4.5,
+      });
+      expect(byTitle.get('Hades')).toBeNull();
     });
 
     it('rejects unknown filters', async () => {

@@ -15,10 +15,10 @@ API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma bibl
 - Autenticação com Google OAuth 2.0 e PKCE.
 - Sessão JWT armazenada em cookie `httpOnly`.
 - Busca e detalhes de jogos pelo catálogo RAWG.
-- Vinculação da conta Steam por OpenID e importação da biblioteca jogada.
+- Vinculação da conta Steam por OpenID, com status e nota individuais na importação.
 - Sincronização manual do tempo jogado sem reduzir valores registrados pelo usuário.
 - Cache local dos jogos consultados.
-- Biblioteca com status, horas jogadas e datas de início e conclusão.
+- Biblioteca com edição direta de status, nota, horas jogadas e datas de progresso.
 - Reviews com notas de 0,5 a 5 estrelas.
 - Estatísticas agregadas para o dashboard.
 - Paginação, filtros, ordenação e validação de entrada.

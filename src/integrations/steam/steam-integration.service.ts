@@ -217,6 +217,11 @@ export class SteamIntegrationService {
         game.status ?? LibraryStatus.COMPLETED,
       ]),
     );
+    const ratingByAppId = new Map<number, number>(
+      input.games.flatMap((game): [number, number][] =>
+        game.rating === undefined ? [] : [[game.appId, game.rating]],
+      ),
+    );
     const steamGames = await this.prisma.steamGame.findMany({
       where: { userId, steamAppId: { in: appIds } },
     });
@@ -254,6 +259,7 @@ export class SteamIntegrationService {
         });
         const importedHours = toHours(steamGame.playtimeMinutes);
 
+        let kind: 'imported' | 'updated';
         if (existingEntry) {
           if (importedHours > existingEntry.hoursPlayed) {
             await this.prisma.gameLibrary.update({
@@ -261,28 +267,39 @@ export class SteamIntegrationService {
               data: { hoursPlayed: importedHours },
             });
           }
-          return { kind: 'updated' as const };
+          kind = 'updated';
+        } else {
+          const initialProgress = resolveLibraryProgress(
+            null,
+            {
+              status:
+                statusByAppId.get(steamGame.steamAppId) ??
+                LibraryStatus.COMPLETED,
+            },
+            todayUtc(),
+          );
+
+          await this.prisma.gameLibrary.create({
+            data: {
+              userId,
+              gameId,
+              ...initialProgress,
+              hoursPlayed: importedHours,
+            },
+          });
+          kind = 'imported';
         }
 
-        const initialProgress = resolveLibraryProgress(
-          null,
-          {
-            status:
-              statusByAppId.get(steamGame.steamAppId) ??
-              LibraryStatus.COMPLETED,
-          },
-          todayUtc(),
-        );
+        const rating = ratingByAppId.get(steamGame.steamAppId);
+        if (rating !== undefined) {
+          await this.prisma.review.upsert({
+            where: { userId_gameId: { userId, gameId } },
+            create: { userId, gameId, rating },
+            update: { rating },
+          });
+        }
 
-        await this.prisma.gameLibrary.create({
-          data: {
-            userId,
-            gameId,
-            ...initialProgress,
-            hoursPlayed: importedHours,
-          },
-        });
-        return { kind: 'imported' as const };
+        return { kind };
       },
     );
 

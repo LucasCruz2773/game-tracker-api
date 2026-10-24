@@ -8,10 +8,15 @@ import {
   IsEnum,
   IsInt,
   IsOptional,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { LibraryStatus } from '../../../generated/prisma/client.js';
+import {
+  MAX_REVIEW_RATING,
+  MIN_REVIEW_RATING,
+} from '../../../reviews/rating.js';
 
 export class ImportSteamGameDto {
   @ApiProperty({ minimum: 1 })
@@ -27,6 +32,18 @@ export class ImportSteamGameDto {
   @IsOptional()
   @IsEnum(LibraryStatus)
   status?: LibraryStatus;
+
+  @ApiPropertyOptional({
+    minimum: MIN_REVIEW_RATING,
+    maximum: MAX_REVIEW_RATING,
+    description: 'Optional half-star rating stored as an integer from 1 to 10',
+    example: 8,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(MIN_REVIEW_RATING)
+  @Max(MAX_REVIEW_RATING)
+  rating?: number;
 }
 
 export class ImportSteamGamesDto {

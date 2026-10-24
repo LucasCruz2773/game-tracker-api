@@ -96,9 +96,27 @@ export class LibraryService {
       }),
       this.prisma.gameLibrary.count({ where }),
     ]);
+    const reviews =
+      entries.length === 0
+        ? []
+        : await this.prisma.review.findMany({
+            where: {
+              userId,
+              gameId: { in: entries.map((entry) => entry.gameId) },
+            },
+            select: { id: true, gameId: true, rating: true },
+          });
+    const reviewByGameId = new Map(
+      reviews.map((review) => [review.gameId, review]),
+    );
 
     return {
-      items: entries.map((entry) => LibraryEntryDto.fromEntity(entry)),
+      items: entries.map((entry) =>
+        LibraryEntryDto.fromEntity(
+          entry,
+          reviewByGameId.get(entry.gameId) ?? null,
+        ),
+      ),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -106,8 +124,10 @@ export class LibraryService {
   }
 
   async findOne(userId: string, gameId: string): Promise<LibraryEntryDto> {
+    const entry = await this.findEntryOrThrow(userId, gameId);
     return LibraryEntryDto.fromEntity(
-      await this.findEntryOrThrow(userId, gameId),
+      entry,
+      await this.findReview(userId, gameId),
     );
   }
 
@@ -141,7 +161,10 @@ export class LibraryService {
         include: libraryEntryWithGameInclude,
       });
 
-      return LibraryEntryDto.fromEntity(entry);
+      return LibraryEntryDto.fromEntity(
+        entry,
+        await this.findReview(userId, game.id),
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -176,7 +199,10 @@ export class LibraryService {
       include: libraryEntryWithGameInclude,
     });
 
-    return LibraryEntryDto.fromEntity(updatedEntry);
+    return LibraryEntryDto.fromEntity(
+      updatedEntry,
+      await this.findReview(userId, gameId),
+    );
   }
 
   async remove(userId: string, gameId: string): Promise<void> {
@@ -203,6 +229,13 @@ export class LibraryService {
     }
 
     return entry;
+  }
+
+  private findReview(userId: string, gameId: string) {
+    return this.prisma.review.findUnique({
+      where: { userId_gameId: { userId, gameId } },
+      select: { id: true, rating: true },
+    });
   }
 }
 

@@ -107,6 +107,10 @@ describe('Steam integration (e2e)', () => {
       .post('/integrations/steam/import')
       .send({ games: [{ appId: 620, status: 'FINISHED' }] })
       .expect(400);
+    await asPlayer()
+      .post('/integrations/steam/import')
+      .send({ games: [{ appId: 620, rating: 11 }] })
+      .expect(400);
   });
 
   it('syncs played games, imports exact matches and updates playtime', async () => {
@@ -174,7 +178,7 @@ describe('Steam integration (e2e)', () => {
       .send({
         games: [
           { appId: 620, status: 'COMPLETED' },
-          { appId: 220, status: 'PLAYING' },
+          { appId: 220, status: 'PLAYING', rating: 9 },
         ],
       })
       .expect(200);
@@ -196,6 +200,13 @@ describe('Steam integration (e2e)', () => {
       completedAt: expect.any(Date),
       game: { title: 'Portal 2' },
     });
+    await expect(
+      prisma.review.findUniqueOrThrow({
+        where: {
+          userId_gameId: { userId: player.user.id, gameId: entries[0]!.gameId },
+        },
+      }),
+    ).resolves.toMatchObject({ rating: 9, body: null });
   });
 
   it('disconnects Steam without removing imported library games', async () => {
