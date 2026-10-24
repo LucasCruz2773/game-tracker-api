@@ -8,6 +8,7 @@ import { GamesModule } from './games/games.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LibraryModule } from './library/library.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
+import { SteamIntegrationModule } from './integrations/steam/steam-integration.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
     GamesModule,
     LibraryModule,
     ReviewsModule,
+    SteamIntegrationModule,
   ],
 })
 export class AppModule {}

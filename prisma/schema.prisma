@@ -31,6 +31,8 @@ model User {
 
   libraryEntries GameLibrary[]
   reviews        Review[]
+  steamAccount   SteamAccount?
+  steamGames     SteamGame[]
 
   @@map("users")
 }
@@ -54,6 +56,7 @@ model Game {
   platforms      Platform[]
   libraryEntries GameLibrary[]
   reviews        Review[]
+  steamGames     SteamGame[]
 
   @@map("games")
 }
@@ -115,4 +118,38 @@ model Review {
   @@unique([userId, gameId])
   @@index([gameId, createdAt])
   @@map("reviews")
+}
+
+model SteamAccount {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  userId       String    @unique @map("user_id") @db.Uuid
+  steamId      String    @unique @map("steam_id")
+  personaName  String    @map("persona_name")
+  avatarUrl    String?   @map("avatar_url")
+  lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("steam_accounts")
+}
+
+model SteamGame {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  steamAppId      Int       @map("steam_app_id")
+  name            String
+  playtimeMinutes Int       @default(0) @map("playtime_minutes")
+  gameId          String?   @map("game_id") @db.Uuid
+  importedAt      DateTime? @map("imported_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game? @relation(fields: [gameId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, steamAppId])
+  @@index([gameId])
+  @@map("steam_games")
 }

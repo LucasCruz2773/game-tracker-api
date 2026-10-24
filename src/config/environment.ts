@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsOptional,
   IsString,
   IsUrl,
   Matches,
@@ -66,6 +67,11 @@ export class EnvironmentVariables {
 
   @IsUrl(LOCAL_URL_OPTIONS)
   FRONTEND_URL: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  STEAM_WEB_API_KEY?: string;
 }
 
 export function validateEnvironment(

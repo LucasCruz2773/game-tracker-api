@@ -6,5 +6,6 @@ import { RawgClient } from './rawg/rawg.client.js';
 @Module({
   controllers: [GamesController],
   providers: [GamesService, RawgClient],
+  exports: [GamesService],
 })
 export class GamesModule {}

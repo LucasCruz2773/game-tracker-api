@@ -15,6 +15,8 @@ API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma bibl
 - Autenticação com Google OAuth 2.0 e PKCE.
 - Sessão JWT armazenada em cookie `httpOnly`.
 - Busca e detalhes de jogos pelo catálogo RAWG.
+- Vinculação da conta Steam por OpenID e importação da biblioteca jogada.
+- Sincronização manual do tempo jogado sem reduzir valores registrados pelo usuário.
 - Cache local dos jogos consultados.
 - Biblioteca com status, horas jogadas e datas de início e conclusão.
 - Reviews com notas de 0,5 a 5 estrelas.
@@ -27,6 +29,7 @@ API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma bibl
 - Node.js 24, TypeScript e NestJS 12
 - PostgreSQL e Prisma 7
 - Google OAuth 2.0, JWT e cookies seguros
+- Steam OpenID e Steam Web API
 - Swagger/OpenAPI
 - Vitest e Supertest
 - Oxlint e Prettier
@@ -41,11 +44,13 @@ flowchart LR
   Proxy["Proxy /api da Vercel"]
   API["NestJS no Render"]
   Google["Google OAuth"]
+  Steam["Steam OpenID + Web API"]
   RAWG["RAWG API"]
   DB[("PostgreSQL no Neon")]
 
   Browser --> Proxy --> API
   API <--> Google
+  API <--> Steam
   API --> RAWG
   API --> DB
 ```
@@ -56,6 +61,8 @@ O navegador acessa a API por `/api` no mesmo domínio do frontend. A Vercel enca
 
 - A API é a única camada que conversa com RAWG e PostgreSQL.
 - O primeiro login com Google cria o usuário automaticamente; não há senha local.
+- A Steam é vinculada como integração; o Google continua sendo a identidade principal.
+- O status não é inferido pela Steam: novos imports entram como `BACKLOG` para revisão do usuário.
 - Jogos retornados pela RAWG são persistidos e seus detalhes são atualizados sob demanda.
 - Restrições do banco impedem jogos duplicados na biblioteca e mais de uma review do mesmo usuário por jogo.
 - O contrato HTTP é documentado com OpenAPI e tratado como fonte de verdade para o frontend.
@@ -112,6 +119,7 @@ Use [`.env.example`](./.env.example) como referência. Não versione o arquivo `
 | ------------------------ | ----------------------------------------------- |
 | `DATABASE_URL`           | Conexão PostgreSQL usada pela aplicação         |
 | `DATABASE_URL_UNPOOLED`  | Conexão direta opcional para migrations no Neon |
+| `TEST_DATABASE_URL`      | Banco descartável exclusivo dos testes E2E      |
 | `JWT_SECRET`             | Assinatura dos tokens de sessão                 |
 | `JWT_EXPIRES_IN_SECONDS` | Duração da sessão                               |
 | `RAWG_API_KEY`           | Credencial do catálogo RAWG                     |
@@ -119,16 +127,18 @@ Use [`.env.example`](./.env.example) como referência. Não versione o arquivo `
 | `GOOGLE_CLIENT_SECRET`   | Segredo do cliente OAuth                        |
 | `GOOGLE_CALLBACK_URL`    | Callback autorizado no Google Cloud             |
 | `FRONTEND_URL`           | Destino do navegador após a autenticação        |
+| `STEAM_WEB_API_KEY`      | Chave privada usada para consultar a Steam      |
 
 ## Endpoints principais
 
-| Área    | Rotas                                                                                  |
-| ------- | -------------------------------------------------------------------------------------- |
-| Health  | `GET /health`                                                                          |
-| Auth    | `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/me`, `POST /auth/logout`   |
-| Games   | `GET /games`, `GET /games/:id`                                                         |
-| Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats`         |
-| Reviews | `GET/POST /games/:gameId/reviews`, `GET .../reviews/mine`, `PATCH/DELETE /reviews/:id` |
+| Área    | Rotas                                                                                                                       |
+| ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Health  | `GET /health`                                                                                                               |
+| Auth    | `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/me`, `POST /auth/logout`                                        |
+| Games   | `GET /games`, `GET /games/:id`                                                                                              |
+| Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats`                                              |
+| Reviews | `GET/POST /games/:gameId/reviews`, `GET .../reviews/mine`, `PATCH/DELETE /reviews/:id`                                      |
+| Steam   | `GET /integrations/steam/connect`, `GET .../callback`, `GET/DELETE /integrations/steam`, `POST .../sync`, `POST .../import` |
 
 Endpoints protegidos exigem o cookie de sessão `gametrack_session`. O Swagger fica habilitado apenas fora de produção.
 
@@ -142,7 +152,8 @@ npm run build
 ```
 
 - Testes unitários cobrem regras de domínio, autenticação, integração RAWG e tratamento de erros.
-- Testes de integração exercitam autenticação, catálogo, biblioteca, reviews e health check contra um banco separado.
+- Testes de integração exercitam autenticação, catálogo, biblioteca, reviews, Steam e health check contra um banco separado.
+- `TEST_DATABASE_URL` é obrigatório e deve apontar para um banco cujo nome termine em `_test`; a suíte se recusa a limpar qualquer outro banco.
 - O GitHub Actions executa lint, testes unitários e build em pushes para `main` e pull requests.
 
 ## Scripts úteis

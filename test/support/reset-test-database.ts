@@ -1,4 +1,5 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 /**
  * Recreates the test database schema from the migrations. The test database is
@@ -13,17 +14,30 @@ export function resetTestDatabase(testDatabaseUrl: string): void {
     );
   }
 
-  const env = { ...process.env, DATABASE_URL: testDatabaseUrl };
+  // Prisma prefers DATABASE_URL_UNPOOLED for migrations. Override both values
+  // so a developer's Neon production URL can never win over the disposable
+  // *_test database selected by the test runner.
+  const env = {
+    ...process.env,
+    DATABASE_URL: testDatabaseUrl,
+    DATABASE_URL_UNPOOLED: testDatabaseUrl,
+  };
+  const prismaCli = resolve(
+    process.cwd(),
+    'node_modules',
+    'prisma',
+    'build',
+    'index.js',
+  );
 
-  try {
-    execSync('npx prisma db execute --stdin', {
-      input: 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;',
-      env,
-      stdio: ['pipe', 'ignore', 'ignore'],
-    });
-  } catch {
-    // The database doesn't exist yet; `migrate deploy` creates it below.
-  }
+  execFileSync(process.execPath, [prismaCli, 'db', 'execute', '--stdin'], {
+    input: 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;',
+    env,
+    stdio: ['pipe', 'ignore', 'ignore'],
+  });
 
-  execSync('npx prisma migrate deploy', { env, stdio: 'inherit' });
+  execFileSync(process.execPath, [prismaCli, 'migrate', 'deploy'], {
+    env,
+    stdio: 'inherit',
+  });
 }

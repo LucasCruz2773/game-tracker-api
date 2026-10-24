@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { defineConfig } from 'vitest/config';
-import { toTestDatabaseUrl } from './test/support/test-database-url.js';
+import { requireTestDatabaseUrl } from './test/support/test-database-url.js';
+
+const testDatabaseUrl = requireTestDatabaseUrl(
+  process.env['TEST_DATABASE_URL'],
+);
 
 export default defineConfig({
   resolve: {
@@ -11,9 +15,12 @@ export default defineConfig({
     root: './',
     include: ['**/*.e2e-spec.ts'],
     globalSetup: ['./test/support/global-setup.ts'],
+    testTimeout: 30_000,
     env: {
       NODE_ENV: 'test',
-      DATABASE_URL: toTestDatabaseUrl(process.env['DATABASE_URL']),
+      DATABASE_URL: testDatabaseUrl,
+      DATABASE_URL_UNPOOLED: testDatabaseUrl,
+      TEST_DATABASE_URL: testDatabaseUrl,
       // RAWG and Google clients are replaced by fakes in e2e tests; no real credentials are needed.
       RAWG_API_KEY: process.env['RAWG_API_KEY'] || 'e2e-fake-rawg-key',
       GOOGLE_CLIENT_ID: process.env['GOOGLE_CLIENT_ID'] || 'e2e-fake-client-id',

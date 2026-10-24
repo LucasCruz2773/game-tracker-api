@@ -56,6 +56,25 @@ export class GamesService {
     return GameDetailsDto.fromEntity(syncedGame);
   }
 
+  async findExactCatalogMatch(title: string): Promise<GameSummaryDto | null> {
+    const catalogResult = await this.rawgClient.searchGames({
+      search: title,
+      page: 1,
+      pageSize: 10,
+    });
+    const normalizedTitle = normalizeTitle(title);
+    const match = catalogResult.games.find(
+      (game) => normalizeTitle(game.title) === normalizedTitle,
+    );
+
+    if (!match) {
+      return null;
+    }
+
+    const [savedGame] = await this.saveCatalogGames([match]);
+    return GameSummaryDto.fromEntity(savedGame);
+  }
+
   /**
    * Fetches the full details of a game the first time it is opened.
    * If the catalog is down, the summary data already stored is returned instead.
@@ -119,9 +138,10 @@ export class GamesService {
     const gamesInLockOrder = [...catalogGames].sort(
       (left, right) => left.rawgId - right.rawgId,
     );
-    const savedGames = await this.prisma.$transaction(
-      gamesInLockOrder.map((catalogGame) =>
-        this.prisma.game.update({
+    const savedGames: GameWithTags[] = [];
+    for (const catalogGame of gamesInLockOrder) {
+      savedGames.push(
+        await this.prisma.game.update({
           where: { rawgId: catalogGame.rawgId },
           data: {
             ...toGameFields(catalogGame),
@@ -130,8 +150,8 @@ export class GamesService {
           },
           include: gameWithTagsInclude,
         }),
-      ),
-    );
+      );
+    }
 
     const savedByRawgId = new Map(
       savedGames.map((game) => [game.rawgId, game]),
@@ -172,4 +192,13 @@ function toSlugReferences(tags: CatalogTag[]): { slug: string }[] {
 
 function uniqueBySlug(tags: CatalogTag[]): CatalogTag[] {
   return [...new Map(tags.map((tag) => [tag.slug, tag])).values()];
+}
+
+function normalizeTitle(title: string): string {
+  return title
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
