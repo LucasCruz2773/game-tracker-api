@@ -92,6 +92,13 @@ describe('Steam integration (e2e)', () => {
       .expect(401);
   });
 
+  it('rejects an invalid import status', async () => {
+    await asPlayer()
+      .post('/integrations/steam/import')
+      .send({ appIds: [620], status: 'FINISHED' })
+      .expect(400);
+  });
+
   it('syncs played games, imports exact matches and updates playtime', async () => {
     const syncResponse = await asPlayer()
       .post('/integrations/steam/sync')
@@ -120,7 +127,11 @@ describe('Steam integration (e2e)', () => {
     const entry = await prisma.gameLibrary.findFirstOrThrow({
       where: { userId: player.user.id },
     });
-    expect(entry).toMatchObject({ status: 'BACKLOG', hoursPlayed: 2 });
+    expect(entry).toMatchObject({
+      status: 'COMPLETED',
+      hoursPlayed: 2,
+      completedAt: expect.any(Date),
+    });
 
     steamClient.getOwnedGames.mockResolvedValue([
       { appId: 620, name: 'Portal 2', playtimeMinutes: 300 },
@@ -139,8 +150,17 @@ describe('Steam integration (e2e)', () => {
     await asPlayer().post('/integrations/steam/sync').expect(200);
     await asPlayer()
       .post('/integrations/steam/import')
-      .send({ appIds: [620] })
+      .send({ appIds: [620], status: 'PLAYING' })
       .expect(200);
+
+    const importedEntry = await prisma.gameLibrary.findFirstOrThrow({
+      where: { userId: player.user.id },
+    });
+    expect(importedEntry).toMatchObject({
+      status: 'PLAYING',
+      startedAt: expect.any(Date),
+      completedAt: null,
+    });
 
     await asPlayer().delete('/integrations/steam').expect(204);
 
@@ -151,7 +171,9 @@ describe('Steam integration (e2e)', () => {
       prisma.steamGame.count({ where: { userId: player.user.id } }),
     ).resolves.toBe(0);
     await expect(
-      prisma.gameLibrary.count({ where: { userId: player.user.id } }),
-    ).resolves.toBe(1);
+      prisma.gameLibrary.findUniqueOrThrow({
+        where: { id: importedEntry.id },
+      }),
+    ).resolves.toMatchObject({ status: 'PLAYING' });
   });
 });

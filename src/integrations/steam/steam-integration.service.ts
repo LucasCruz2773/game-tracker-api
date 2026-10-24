@@ -6,11 +6,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
+import { todayUtc } from '../../common/dates.js';
 import type { EnvironmentVariables } from '../../config/environment.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { LibraryStatus, Prisma } from '../../generated/prisma/client.js';
 import { GamesService } from '../../games/games.service.js';
 import { MAX_HOURS_PLAYED } from '../../library/dto/add-to-library.dto.js';
+import { resolveLibraryProgress } from '../../library/library-entry.rules.js';
 import type { ImportSteamGamesDto } from './dto/import-steam-games.dto.js';
 import type {
   SteamImportResultDto,
@@ -208,6 +210,11 @@ export class SteamIntegrationService {
     input: ImportSteamGamesDto,
   ): Promise<SteamImportResultDto> {
     await this.requireAccount(userId);
+    const initialProgress = resolveLibraryProgress(
+      null,
+      { status: input.status ?? LibraryStatus.COMPLETED },
+      todayUtc(),
+    );
     const steamGames = await this.prisma.steamGame.findMany({
       where: { userId, steamAppId: { in: input.appIds } },
     });
@@ -259,7 +266,7 @@ export class SteamIntegrationService {
           data: {
             userId,
             gameId,
-            status: LibraryStatus.BACKLOG,
+            ...initialProgress,
             hoursPlayed: importedHours,
           },
         });
