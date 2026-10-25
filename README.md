@@ -14,6 +14,7 @@ API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma bibl
 
 - Autenticação com Google OAuth 2.0 e PKCE.
 - Sessão JWT armazenada em cookie `httpOnly`.
+- Busca de jogadores e conexões sociais para seguir ou deixar de seguir usuários.
 - Busca e detalhes de jogos pelo catálogo RAWG.
 - Vinculação da conta Steam por OpenID, com status e nota individuais na importação.
 - Sincronização manual do tempo jogado sem reduzir valores registrados pelo usuário.
@@ -65,6 +66,7 @@ O navegador acessa a API por `/api` no mesmo domínio do frontend. A Vercel enca
 - O status não é inferido pela Steam: o usuário o escolhe para cada jogo ao importar, com `COMPLETED` como padrão.
 - Jogos retornados pela RAWG são persistidos e seus detalhes são atualizados sob demanda.
 - Restrições do banco impedem jogos duplicados na biblioteca e mais de uma review do mesmo usuário por jogo.
+- A relação social é direcional e impede conexões duplicadas ou o usuário seguir a si mesmo.
 - O contrato HTTP é documentado com OpenAPI e tratado como fonte de verdade para o frontend.
 
 ## Modelo de dados
@@ -75,11 +77,13 @@ erDiagram
   GAME ||--o{ GAME_LIBRARY : integra
   USER ||--o{ REVIEW : escreve
   GAME ||--o{ REVIEW : recebe
+  USER ||--o{ USER_FOLLOW : seguidor
+  USER ||--o{ USER_FOLLOW : seguido
   GAME }o--o{ GENRE : classificado
   GAME }o--o{ PLATFORM : disponivel
 ```
 
-Entidades principais: `User`, `Game`, `GameLibrary`, `Review`, `Genre` e `Platform`. O schema completo está em [`prisma/schema.prisma`](./prisma/schema.prisma).
+Entidades principais: `User`, `UserFollow`, `Game`, `GameLibrary`, `Review`, `Genre` e `Platform`. O schema completo está em [`prisma/schema.prisma`](./prisma/schema.prisma).
 
 ## Executando localmente
 
@@ -138,6 +142,7 @@ Use [`.env.example`](./.env.example) como referência. Não versione o arquivo `
 | Games   | `GET /games`, `GET /games/:id`                                                                                              |
 | Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats`                                              |
 | Reviews | `GET/POST /games/:gameId/reviews`, `GET .../reviews/mine`, `PATCH/DELETE /reviews/:id`                                      |
+| Social  | `GET /users`, `POST/DELETE /users/:username/follow`                                                                         |
 | Steam   | `GET /integrations/steam/connect`, `GET .../callback`, `GET/DELETE /integrations/steam`, `POST .../sync`, `POST .../import` |
 
 Endpoints protegidos exigem o cookie de sessão `gametrack_session`. O Swagger fica habilitado apenas fora de produção.
@@ -152,7 +157,7 @@ npm run build
 ```
 
 - Testes unitários cobrem regras de domínio, autenticação, integração RAWG e tratamento de erros.
-- Testes de integração exercitam autenticação, catálogo, biblioteca, reviews, Steam e health check contra um banco separado.
+- Testes de integração exercitam autenticação, catálogo, biblioteca, reviews, relações sociais, Steam e health check contra um banco separado.
 - `TEST_DATABASE_URL` é obrigatório e deve apontar para um banco cujo nome termine em `_test`; a suíte se recusa a limpar qualquer outro banco.
 - O GitHub Actions executa lint, testes unitários e build em pushes para `main` e pull requests.
 

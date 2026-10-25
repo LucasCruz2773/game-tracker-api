@@ -33,8 +33,26 @@ model User {
   reviews        Review[]
   steamAccount   SteamAccount?
   steamGames     SteamGame[]
+  followers      UserFollow[]  @relation("FollowingUser")
+  following      UserFollow[]  @relation("FollowerUser")
 
   @@map("users")
+}
+
+/// A directional social connection: follower follows following.
+/// Self-following is prevented by a CHECK constraint in the migration.
+model UserFollow {
+  followerId  String   @map("follower_id") @db.Uuid
+  followingId String   @map("following_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  follower  User @relation("FollowerUser", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowingUser", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
+  @@map("user_follows")
 }
 
 model Game {
