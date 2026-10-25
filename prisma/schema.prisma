@@ -16,6 +16,14 @@ enum LibraryStatus {
   @@map("library_status")
 }
 
+enum ActivityType {
+  LIBRARY_ADDED
+  GAME_COMPLETED
+  REVIEWED
+
+  @@map("activity_type")
+}
+
 model User {
   id                String   @id @default(uuid(7)) @db.Uuid
   /// Google account identifier (the ID token `sub` claim). Never changes for an account.
@@ -37,6 +45,7 @@ model User {
   steamGames     SteamGame[]
   followers      UserFollow[]  @relation("FollowingUser")
   following      UserFollow[]  @relation("FollowerUser")
+  activities     Activity[]
 
   @@map("users")
 }
@@ -77,8 +86,28 @@ model Game {
   libraryEntries GameLibrary[]
   reviews        Review[]
   steamGames     SteamGame[]
+  activities     Activity[]
 
   @@map("games")
+}
+
+/// Immutable snapshots used by the social feed. Review fields are copied so
+/// an activity remains meaningful even after the original review changes.
+model Activity {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  actorId    String       @map("actor_id") @db.Uuid
+  gameId     String       @map("game_id") @db.Uuid
+  type       ActivityType
+  rating     Int?         @db.SmallInt
+  reviewBody String?      @map("review_body")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  game  Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@map("activities")
 }
 
 model Genre {

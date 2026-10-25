@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { parseIsoDate, todayUtc } from '../common/dates.js';
 import { PrismaService } from '../database/prisma.service.js';
-import { Prisma } from '../generated/prisma/client.js';
+import { ActivityType, Prisma } from '../generated/prisma/client.js';
 import type { AddToLibraryDto } from './dto/add-to-library.dto.js';
 import {
   LibraryEntryDto,
@@ -80,22 +80,25 @@ export class LibraryService {
     const orderBy: Prisma.GameLibraryOrderByWithRelationInput[] = [
       query.sortBy === 'title'
         ? { game: { title: order } }
-        : { [query.sortBy]: order },
+        : { [query.sortBy === 'rating' ? 'updatedAt' : query.sortBy]: order },
       // Tie-breaker so pagination is stable when sort values are equal.
       // UUIDv7 ids are time-ordered, so this also matches creation order.
       { id: order },
     ];
 
-    const [entries, total] = await this.prisma.$transaction([
-      this.prisma.gameLibrary.findMany({
-        where,
-        orderBy,
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-        include: libraryEntryWithGameInclude,
-      }),
-      this.prisma.gameLibrary.count({ where }),
-    ]);
+    const [entries, total] =
+      query.sortBy === 'rating'
+        ? await this.listOrderedByRating(userId, query, order)
+        : await this.prisma.$transaction([
+            this.prisma.gameLibrary.findMany({
+              where,
+              orderBy,
+              skip: (query.page - 1) * query.pageSize,
+              take: query.pageSize,
+              include: libraryEntryWithGameInclude,
+            }),
+            this.prisma.gameLibrary.count({ where }),
+          ]);
     const reviews =
       entries.length === 0
         ? []
@@ -151,14 +154,27 @@ export class LibraryService {
     );
 
     try {
-      const entry = await this.prisma.gameLibrary.create({
-        data: {
-          userId,
-          gameId: game.id,
-          hoursPlayed: addToLibraryDto.hoursPlayed ?? 0,
-          ...progress,
-        },
-        include: libraryEntryWithGameInclude,
+      const entry = await this.prisma.$transaction(async (transaction) => {
+        const created = await transaction.gameLibrary.create({
+          data: {
+            userId,
+            gameId: game.id,
+            hoursPlayed: addToLibraryDto.hoursPlayed ?? 0,
+            ...progress,
+          },
+          include: libraryEntryWithGameInclude,
+        });
+        await transaction.activity.create({
+          data: {
+            actorId: userId,
+            gameId: game.id,
+            type:
+              progress.status === 'COMPLETED'
+                ? ActivityType.GAME_COMPLETED
+                : ActivityType.LIBRARY_ADDED,
+          },
+        });
+        return created;
       });
 
       return LibraryEntryDto.fromEntity(
@@ -188,15 +204,27 @@ export class LibraryService {
       todayUtc(),
     );
 
-    const updatedEntry = await this.prisma.gameLibrary.update({
-      where: { id: entry.id },
-      data: {
-        ...progress,
-        ...(updateDto.hoursPlayed !== undefined && {
-          hoursPlayed: updateDto.hoursPlayed,
-        }),
-      },
-      include: libraryEntryWithGameInclude,
+    const updatedEntry = await this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.gameLibrary.update({
+        where: { id: entry.id },
+        data: {
+          ...progress,
+          ...(updateDto.hoursPlayed !== undefined && {
+            hoursPlayed: updateDto.hoursPlayed,
+          }),
+        },
+        include: libraryEntryWithGameInclude,
+      });
+      if (entry.status !== 'COMPLETED' && progress.status === 'COMPLETED') {
+        await transaction.activity.create({
+          data: {
+            actorId: userId,
+            gameId,
+            type: ActivityType.GAME_COMPLETED,
+          },
+        });
+      }
+      return updated;
     });
 
     return LibraryEntryDto.fromEntity(
@@ -236,6 +264,45 @@ export class LibraryService {
       where: { userId_gameId: { userId, gameId } },
       select: { id: true, rating: true },
     });
+  }
+
+  private async listOrderedByRating(
+    userId: string,
+    query: ListLibraryQueryDto,
+    order: 'asc' | 'desc',
+  ): Promise<[LibraryEntryWithGame[], number]> {
+    const statusFilter = query.status
+      ? Prisma.sql`AND gl.status = ${query.status}::"library_status"`
+      : Prisma.empty;
+    const direction = order === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+    const offset = (query.page - 1) * query.pageSize;
+    const ids = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT gl.id
+      FROM "game_library" gl
+      LEFT JOIN "reviews" r
+        ON r."user_id" = gl."user_id" AND r."game_id" = gl."game_id"
+      WHERE gl."user_id" = ${userId}::uuid ${statusFilter}
+      ORDER BY r.rating ${direction} NULLS LAST, gl.id ${direction}
+      LIMIT ${query.pageSize} OFFSET ${offset}
+    `);
+    const [entries, total] = await Promise.all([
+      this.prisma.gameLibrary.findMany({
+        where: { id: { in: ids.map(({ id }) => id) } },
+        include: libraryEntryWithGameInclude,
+      }),
+      this.prisma.gameLibrary.count({
+        where: {
+          userId,
+          ...(query.status && { status: query.status }),
+        },
+      }),
+    ]);
+    const position = new Map(ids.map(({ id }, index) => [id, index]));
+    entries.sort(
+      (left, right) =>
+        (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0),
+    );
+    return [entries, total];
   }
 }
 

@@ -9,7 +9,11 @@ import { randomBytes } from 'node:crypto';
 import { todayUtc } from '../../common/dates.js';
 import type { EnvironmentVariables } from '../../config/environment.js';
 import { PrismaService } from '../../database/prisma.service.js';
-import { LibraryStatus, Prisma } from '../../generated/prisma/client.js';
+import {
+  ActivityType,
+  LibraryStatus,
+  Prisma,
+} from '../../generated/prisma/client.js';
 import { GamesService } from '../../games/games.service.js';
 import { MAX_HOURS_PLAYED } from '../../library/dto/add-to-library.dto.js';
 import { resolveLibraryProgress } from '../../library/library-entry.rules.js';
@@ -249,57 +253,82 @@ export class SteamIntegrationService {
           return { kind: 'unmatched' as const, appId: steamGame.steamAppId };
         }
 
-        await this.prisma.steamGame.update({
-          where: { id: steamGame.id },
-          data: { gameId, importedAt: new Date() },
-        });
-
-        const existingEntry = await this.prisma.gameLibrary.findUnique({
-          where: { userId_gameId: { userId, gameId } },
-        });
         const importedHours = toHours(steamGame.playtimeMinutes);
+        const rating = ratingByAppId.get(steamGame.steamAppId);
+        return this.prisma.$transaction(async (transaction) => {
+          await transaction.steamGame.update({
+            where: { id: steamGame.id },
+            data: { gameId, importedAt: new Date() },
+          });
+          const existingEntry = await transaction.gameLibrary.findUnique({
+            where: { userId_gameId: { userId, gameId } },
+          });
 
-        let kind: 'imported' | 'updated';
-        if (existingEntry) {
-          if (importedHours > existingEntry.hoursPlayed) {
-            await this.prisma.gameLibrary.update({
-              where: { id: existingEntry.id },
-              data: { hoursPlayed: importedHours },
+          let kind: 'imported' | 'updated';
+          if (existingEntry) {
+            if (importedHours > existingEntry.hoursPlayed) {
+              await transaction.gameLibrary.update({
+                where: { id: existingEntry.id },
+                data: { hoursPlayed: importedHours },
+              });
+            }
+            kind = 'updated';
+          } else {
+            const initialProgress = resolveLibraryProgress(
+              null,
+              {
+                status:
+                  statusByAppId.get(steamGame.steamAppId) ??
+                  LibraryStatus.COMPLETED,
+              },
+              todayUtc(),
+            );
+            await transaction.gameLibrary.create({
+              data: {
+                userId,
+                gameId,
+                ...initialProgress,
+                hoursPlayed: importedHours,
+              },
+            });
+            await transaction.activity.create({
+              data: {
+                actorId: userId,
+                gameId,
+                type:
+                  initialProgress.status === LibraryStatus.COMPLETED
+                    ? ActivityType.GAME_COMPLETED
+                    : ActivityType.LIBRARY_ADDED,
+              },
+            });
+            kind = 'imported';
+          }
+
+          if (rating !== undefined) {
+            await transaction.review.upsert({
+              where: { userId_gameId: { userId, gameId } },
+              create: { userId, gameId, rating },
+              update: { rating },
+            });
+            await transaction.activity.deleteMany({
+              where: {
+                actorId: userId,
+                gameId,
+                type: ActivityType.REVIEWED,
+              },
+            });
+            await transaction.activity.create({
+              data: {
+                actorId: userId,
+                gameId,
+                type: ActivityType.REVIEWED,
+                rating,
+              },
             });
           }
-          kind = 'updated';
-        } else {
-          const initialProgress = resolveLibraryProgress(
-            null,
-            {
-              status:
-                statusByAppId.get(steamGame.steamAppId) ??
-                LibraryStatus.COMPLETED,
-            },
-            todayUtc(),
-          );
 
-          await this.prisma.gameLibrary.create({
-            data: {
-              userId,
-              gameId,
-              ...initialProgress,
-              hoursPlayed: importedHours,
-            },
-          });
-          kind = 'imported';
-        }
-
-        const rating = ratingByAppId.get(steamGame.steamAppId);
-        if (rating !== undefined) {
-          await this.prisma.review.upsert({
-            where: { userId_gameId: { userId, gameId } },
-            create: { userId, gameId, rating },
-            update: { rating },
-          });
-        }
-
-        return { kind };
+          return { kind };
+        });
       },
     );
 

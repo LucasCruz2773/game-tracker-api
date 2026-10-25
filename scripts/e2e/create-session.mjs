@@ -32,7 +32,13 @@ execSync('npx prisma db execute --stdin', {
     VALUES (${sqlString(userId)}, ${sqlString(`e2e-${userId}`)},
       ${sqlString(`${username}@gametrack.test`)}, ${sqlString(username)},
       ${sqlString(displayName)}, now());`,
-  env: { ...process.env, DATABASE_URL: environment.DATABASE_URL },
+  // Prisma prefers the direct URL when it exists. Force both connections to
+  // the disposable test database so a local production URL can never win.
+  env: {
+    ...process.env,
+    DATABASE_URL: environment.DATABASE_URL,
+    DATABASE_URL_UNPOOLED: environment.DATABASE_URL,
+  },
   stdio: ['pipe', 'ignore', 'inherit'],
 });
 

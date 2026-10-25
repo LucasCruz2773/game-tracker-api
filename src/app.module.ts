@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ActivitiesModule } from './activities/activities.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { validateEnvironment } from './config/environment.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -23,6 +24,7 @@ import { SteamIntegrationModule } from './integrations/steam/steam-integration.m
       throttlers: [{ ttl: 60_000, limit: 10 }],
     }),
     DatabaseModule,
+    ActivitiesModule,
     HealthModule,
     AuthModule,
     GamesModule,

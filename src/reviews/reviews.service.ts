@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
-import { Prisma } from '../generated/prisma/client.js';
+import { ActivityType, Prisma } from '../generated/prisma/client.js';
 import type { CreateReviewDto } from './dto/create-review.dto.js';
 import type { ListReviewsQueryDto } from './dto/list-reviews-query.dto.js';
 import {
@@ -73,14 +73,27 @@ export class ReviewsService {
     await this.ensureGameExists(gameId);
 
     try {
-      const review = await this.prisma.review.create({
-        data: {
-          userId,
-          gameId,
-          rating: createReviewDto.rating,
-          body: normalizeBody(createReviewDto.body),
-        },
-        include: reviewWithAuthorInclude,
+      const body = normalizeBody(createReviewDto.body);
+      const review = await this.prisma.$transaction(async (transaction) => {
+        const created = await transaction.review.create({
+          data: {
+            userId,
+            gameId,
+            rating: createReviewDto.rating,
+            body,
+          },
+          include: reviewWithAuthorInclude,
+        });
+        await transaction.activity.create({
+          data: {
+            actorId: userId,
+            gameId,
+            type: ActivityType.REVIEWED,
+            rating: created.rating,
+            reviewBody: created.body,
+          },
+        });
+        return created;
       });
 
       return ReviewDto.fromEntity(review);
@@ -103,18 +116,39 @@ export class ReviewsService {
     const review = await this.findReviewOrThrow(reviewId);
     this.ensureOwner(userId, review);
 
-    const updatedReview = await this.prisma.review.update({
-      where: { id: reviewId },
-      data: {
-        ...(updateReviewDto.rating !== undefined && {
-          rating: updateReviewDto.rating,
-        }),
-        ...(updateReviewDto.body !== undefined && {
-          body: normalizeBody(updateReviewDto.body),
-        }),
+    const updatedReview = await this.prisma.$transaction(
+      async (transaction) => {
+        const updated = await transaction.review.update({
+          where: { id: reviewId },
+          data: {
+            ...(updateReviewDto.rating !== undefined && {
+              rating: updateReviewDto.rating,
+            }),
+            ...(updateReviewDto.body !== undefined && {
+              body: normalizeBody(updateReviewDto.body),
+            }),
+          },
+          include: reviewWithAuthorInclude,
+        });
+        await transaction.activity.deleteMany({
+          where: {
+            actorId: userId,
+            gameId: review.gameId,
+            type: ActivityType.REVIEWED,
+          },
+        });
+        await transaction.activity.create({
+          data: {
+            actorId: userId,
+            gameId: review.gameId,
+            type: ActivityType.REVIEWED,
+            rating: updated.rating,
+            reviewBody: updated.body,
+          },
+        });
+        return updated;
       },
-      include: reviewWithAuthorInclude,
-    });
+    );
 
     return ReviewDto.fromEntity(updatedReview);
   }
@@ -123,7 +157,16 @@ export class ReviewsService {
     const review = await this.findReviewOrThrow(reviewId);
     this.ensureOwner(userId, review);
 
-    await this.prisma.review.delete({ where: { id: reviewId } });
+    await this.prisma.$transaction([
+      this.prisma.review.delete({ where: { id: reviewId } }),
+      this.prisma.activity.deleteMany({
+        where: {
+          actorId: userId,
+          gameId: review.gameId,
+          type: ActivityType.REVIEWED,
+        },
+      }),
+    ]);
   }
 
   private async ensureGameExists(gameId: string): Promise<void> {

@@ -3,7 +3,12 @@ import { IsEnum, IsIn, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import { LibraryStatus } from '../../generated/prisma/client.js';
 
-export const LIBRARY_SORT_FIELDS = ['updatedAt', 'createdAt', 'title'] as const;
+export const LIBRARY_SORT_FIELDS = [
+  'updatedAt',
+  'createdAt',
+  'title',
+  'rating',
+] as const;
 export type LibrarySortField = (typeof LIBRARY_SORT_FIELDS)[number];
 
 export class ListLibraryQueryDto extends PaginationQueryDto {
@@ -18,7 +23,7 @@ export class ListLibraryQueryDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({
     enum: ['asc', 'desc'],
-    description: 'Defaults to asc for title and desc for dates',
+    description: 'Defaults to asc for title and desc for dates and rating',
   })
   @IsOptional()
   @IsIn(['asc', 'desc'])
