@@ -75,6 +75,9 @@ export class LibraryService {
     const where: Prisma.GameLibraryWhereInput = {
       userId,
       ...(query.status && { status: query.status }),
+      ...(query.search && {
+        game: { title: { contains: query.search, mode: 'insensitive' } },
+      }),
     };
     const order = query.order ?? (query.sortBy === 'title' ? 'asc' : 'desc');
     const orderBy: Prisma.GameLibraryOrderByWithRelationInput[] = [
@@ -274,14 +277,18 @@ export class LibraryService {
     const statusFilter = query.status
       ? Prisma.sql`AND gl.status = ${query.status}::"library_status"`
       : Prisma.empty;
+    const searchFilter = query.search
+      ? Prisma.sql`AND g.title ILIKE ${`%${query.search}%`}`
+      : Prisma.empty;
     const direction = order === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
     const offset = (query.page - 1) * query.pageSize;
     const ids = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
       SELECT gl.id
       FROM "game_library" gl
+      INNER JOIN "games" g ON g.id = gl."game_id"
       LEFT JOIN "reviews" r
         ON r."user_id" = gl."user_id" AND r."game_id" = gl."game_id"
-      WHERE gl."user_id" = ${userId}::uuid ${statusFilter}
+      WHERE gl."user_id" = ${userId}::uuid ${statusFilter} ${searchFilter}
       ORDER BY r.rating ${direction} NULLS LAST, gl.id ${direction}
       LIMIT ${query.pageSize} OFFSET ${offset}
     `);
@@ -294,6 +301,9 @@ export class LibraryService {
         where: {
           userId,
           ...(query.status && { status: query.status }),
+          ...(query.search && {
+            game: { title: { contains: query.search, mode: 'insensitive' } },
+          }),
         },
       }),
     ]);
