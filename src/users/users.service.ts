@@ -1,7 +1,12 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import type { GoogleProfile } from '../auth/google/google-oauth.client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma, type User } from '../generated/prisma/client.js';
+import type { UpdateUserProfileDto } from './dto/update-user-profile.dto.js';
 import { toUsernameBase, withRandomSuffix } from './username.js';
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -16,12 +21,51 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
+  async updateProfile(
+    userId: string,
+    changes: UpdateUserProfileDto,
+  ): Promise<User> {
+    if (
+      changes.displayName === undefined &&
+      changes.username === undefined &&
+      changes.avatarUrl === undefined
+    ) {
+      throw new BadRequestException('Provide at least one profile field');
+    }
+
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(changes.displayName !== undefined && {
+            displayName: changes.displayName,
+          }),
+          ...(changes.username !== undefined && {
+            username: changes.username,
+          }),
+          ...(changes.avatarUrl !== undefined && {
+            avatarUrl: changes.avatarUrl,
+          }),
+          profileCustomized: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_CONSTRAINT_VIOLATION
+      ) {
+        throw new ConflictException('Username is already in use');
+      }
+      throw error;
+    }
+  }
+
   /**
    * Returns the user linked to the Google account, creating it on first sign-in.
-   * Profile data is refreshed on every sign-in so it follows changes made in Google.
+   * Google profile data stays in sync until the user customizes their local profile.
    */
   async findOrCreateFromGoogle(profile: GoogleProfile): Promise<User> {
-    const profileData = {
+    const googleProfileData = {
       email: profile.email.toLowerCase(),
       displayName: profile.displayName,
       avatarUrl: profile.avatarUrl,
@@ -34,12 +78,14 @@ export class UsersService {
     if (existingUser) {
       return this.prisma.user.update({
         where: { id: existingUser.id },
-        data: profileData,
+        data: existingUser.profileCustomized
+          ? { email: googleProfileData.email }
+          : googleProfileData,
       });
     }
 
     const emailOwner = await this.prisma.user.findUnique({
-      where: { email: profileData.email },
+      where: { email: googleProfileData.email },
       select: { id: true },
     });
 
@@ -54,7 +100,7 @@ export class UsersService {
       try {
         return await this.prisma.user.create({
           data: {
-            ...profileData,
+            ...googleProfileData,
             googleId: profile.googleId,
             username: await this.findAvailableUsername(profile.displayName),
           },

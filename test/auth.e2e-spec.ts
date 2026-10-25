@@ -140,6 +140,32 @@ describe('Auth (e2e)', () => {
       await expect(prisma.user.count()).resolves.toBe(1);
     });
 
+    it('preserves a customized profile on later Google sign-ins', async () => {
+      const first = await signInWithGoogle();
+      await first.agent
+        .patch('/auth/me')
+        .send({
+          displayName: 'Retro Lucas',
+          username: 'retro_lucas',
+          avatarUrl: 'https://example.com/retro-avatar.png',
+        })
+        .expect(200);
+
+      googleOAuthClient.fetchProfile.mockResolvedValue({
+        ...googleProfile,
+        displayName: 'Changed on Google',
+        avatarUrl: 'https://example.com/google-avatar.png',
+      });
+      const second = await signInWithGoogle();
+      const currentUser = await second.agent.get('/auth/me').expect(200);
+
+      expect(currentUser.body).toMatchObject({
+        displayName: 'Retro Lucas',
+        username: 'retro_lucas',
+        avatarUrl: 'https://example.com/retro-avatar.png',
+      });
+    });
+
     it('picks another username when the generated one is taken', async () => {
       await prisma.user.create({
         data: {
@@ -227,6 +253,72 @@ describe('Auth (e2e)', () => {
       await request(app.getHttpServer())
         .get('/auth/me')
         .set('Cookie', `gametrack_session=${token}`)
+        .expect(401);
+    });
+  });
+
+  describe('PATCH /auth/me', () => {
+    it('updates the signed-in user profile', async () => {
+      const { agent } = await signInWithGoogle();
+
+      const response = await agent
+        .patch('/auth/me')
+        .send({
+          displayName: '  Retro Lucas  ',
+          username: 'RETRO_LUCAS',
+          avatarUrl: 'https://example.com/avatar.png',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        displayName: 'Retro Lucas',
+        username: 'retro_lucas',
+        avatarUrl: 'https://example.com/avatar.png',
+      });
+      await expect(
+        prisma.user.findUniqueOrThrow({
+          where: { id: response.body.id as string },
+          select: { profileCustomized: true },
+        }),
+      ).resolves.toEqual({ profileCustomized: true });
+    });
+
+    it('allows clearing the name and avatar', async () => {
+      const { agent } = await signInWithGoogle();
+
+      const response = await agent
+        .patch('/auth/me')
+        .send({ displayName: ' ', avatarUrl: '' })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        displayName: null,
+        avatarUrl: null,
+      });
+    });
+
+    it('rejects invalid or duplicate usernames', async () => {
+      await prisma.user.create({
+        data: {
+          googleId: 'another-google-account',
+          email: 'another@example.com',
+          username: 'taken_name',
+        },
+      });
+      const { agent } = await signInWithGoogle();
+
+      await agent.patch('/auth/me').send({ username: 'no spaces' }).expect(400);
+      await agent
+        .patch('/auth/me')
+        .send({ username: 'taken_name' })
+        .expect(409);
+      await agent.patch('/auth/me').send({}).expect(400);
+    });
+
+    it('requires a session', async () => {
+      await request(app.getHttpServer())
+        .patch('/auth/me')
+        .send({ username: 'new_name' })
         .expect(401);
     });
   });

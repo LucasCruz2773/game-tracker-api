@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { timingSafeEqual } from 'node:crypto';
 import type { User } from '../generated/prisma/client.js';
 import { UsersService } from '../users/users.service.js';
+import type { UpdateUserProfileDto } from '../users/dto/update-user-profile.dto.js';
 import type { SessionTokenPayload } from './auth.types.js';
 import {
   GoogleOAuthClient,
@@ -98,6 +99,13 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  updateCurrentUser(
+    userId: string,
+    changes: UpdateUserProfileDto,
+  ): Promise<User> {
+    return this.usersService.updateProfile(userId, changes);
   }
 
   private async createSession(user: User): Promise<AuthSession> {

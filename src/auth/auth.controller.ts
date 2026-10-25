@@ -1,9 +1,11 @@
 import {
   Controller,
+  Body,
   Get,
   HttpCode,
   HttpStatus,
   Logger,
+  Patch,
   Post,
   Query,
   Req,
@@ -13,6 +15,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ApiCookieAuth,
+  ApiBadRequestResponse,
+  ApiConflictResponse,
   ApiFoundResponse,
   ApiNoContentResponse,
   ApiOkResponse,
@@ -28,6 +32,7 @@ import {
   type EnvironmentVariables,
 } from '../config/environment.js';
 import { UserResponseDto } from '../users/dto/user-response.dto.js';
+import { UpdateUserProfileDto } from '../users/dto/update-user-profile.dto.js';
 import {
   GOOGLE_SIGN_IN_COOKIE_NAME,
   GOOGLE_SIGN_IN_TTL_MS,
@@ -140,6 +145,22 @@ export class AuthController {
   async me(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
     return UserResponseDto.fromEntity(
       await this.authService.getCurrentUser(user.id),
+    );
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiCookieAuth()
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiBadRequestResponse({ description: 'Invalid or empty profile changes' })
+  @ApiConflictResponse({ description: 'Username is already in use' })
+  @ApiUnauthorizedResponse()
+  async updateMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() changes: UpdateUserProfileDto,
+  ): Promise<UserResponseDto> {
+    return UserResponseDto.fromEntity(
+      await this.authService.updateCurrentUser(user.id, changes),
     );
   }
 

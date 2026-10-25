@@ -14,6 +14,7 @@ API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma bibl
 
 - Autenticação com Google OAuth 2.0 e PKCE.
 - Sessão JWT armazenada em cookie `httpOnly`.
+- Perfil personalizável com nome, nick e foto por URL pública.
 - Busca de jogadores e conexões sociais para seguir ou deixar de seguir usuários.
 - Busca e detalhes de jogos pelo catálogo RAWG.
 - Vinculação da conta Steam por OpenID, com status e nota individuais na importação.
@@ -138,7 +139,7 @@ Use [`.env.example`](./.env.example) como referência. Não versione o arquivo `
 | Área    | Rotas                                                                                                                       |
 | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Health  | `GET /health`                                                                                                               |
-| Auth    | `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/me`, `POST /auth/logout`                                        |
+| Auth    | `GET /auth/google`, `GET /auth/google/callback`, `GET/PATCH /auth/me`, `POST /auth/logout`                                  |
 | Games   | `GET /games`, `GET /games/:id`                                                                                              |
 | Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats`                                              |
 | Reviews | `GET/POST /games/:gameId/reviews`, `GET .../reviews/mine`, `PATCH/DELETE /reviews/:id`                                      |
