@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import type {
   CatalogGame,
@@ -54,6 +59,54 @@ export class GamesService {
       : await this.syncGameDetails(game);
 
     return GameDetailsDto.fromEntity(syncedGame);
+  }
+
+  async fetchCover(id: string): Promise<{ body: Buffer; contentType: string }> {
+    const game = await this.prisma.game.findUnique({
+      where: { id },
+      select: { coverUrl: true },
+    });
+
+    if (!game?.coverUrl) {
+      throw new NotFoundException('Game cover not found');
+    }
+
+    let coverUrl: URL;
+    try {
+      coverUrl = new URL(game.coverUrl);
+    } catch {
+      throw new BadGatewayException('Invalid game cover URL');
+    }
+
+    if (
+      coverUrl.protocol !== 'https:' ||
+      (coverUrl.hostname !== 'rawg.io' &&
+        !coverUrl.hostname.endsWith('.rawg.io'))
+    ) {
+      throw new BadGatewayException('Unsupported game cover host');
+    }
+
+    try {
+      const response = await fetch(coverUrl, {
+        headers: { Accept: 'image/*' },
+        signal: AbortSignal.timeout(8_000),
+      });
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!response.ok || !contentType.startsWith('image/')) {
+        throw new Error(`Cover responded with ${response.status}`);
+      }
+
+      const body = Buffer.from(await response.arrayBuffer());
+      if (body.byteLength > 10 * 1024 * 1024) {
+        throw new Error('Cover is larger than 10 MB');
+      }
+      return { body, contentType };
+    } catch (error) {
+      this.logger.warn(
+        `Could not fetch cover for game ${id}: ${String(error)}`,
+      );
+      throw new BadGatewayException('Game cover is unavailable');
+    }
   }
 
   async findExactCatalogMatch(title: string): Promise<GameSummaryDto | null> {
