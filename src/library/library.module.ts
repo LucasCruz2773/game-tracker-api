@@ -7,5 +7,6 @@ import { LibraryService } from './library.service.js';
   imports: [AuthModule],
   controllers: [LibraryController],
   providers: [LibraryService],
+  exports: [LibraryService],
 })
 export class LibraryModule {}

@@ -12,6 +12,18 @@ interface SocialUserEntity {
   };
 }
 
+interface PublicProfileEntity {
+  id: string;
+  username: string;
+  avatarUrl: string | null;
+  createdAt: Date;
+  followers: { followerId: string }[];
+  _count: {
+    followers: number;
+    following: number;
+  };
+}
+
 export class SocialUserDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
@@ -59,6 +71,49 @@ export class SocialUserListResponseDto {
 
   @ApiProperty({ example: 42 })
   total: number;
+}
+
+export class SocialSummaryDto {
+  @ApiProperty({ example: 12 })
+  followerCount: number;
+
+  @ApiProperty({ example: 8 })
+  followingCount: number;
+}
+
+export class PublicProfileDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 'lucas_fernandes' })
+  username: string;
+
+  @ApiProperty({ type: String, nullable: true, format: 'uri' })
+  avatarUrl: string | null;
+
+  @ApiProperty({ example: 12 })
+  followerCount: number;
+
+  @ApiProperty({ example: 8 })
+  followingCount: number;
+
+  @ApiProperty({ example: true })
+  isFollowing: boolean;
+
+  @ApiProperty()
+  createdAt: Date;
+
+  static fromEntity(user: PublicProfileEntity): PublicProfileDto {
+    return {
+      id: user.id,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+      followerCount: user._count.followers,
+      followingCount: user._count.following,
+      isFollowing: user.followers.length > 0,
+      createdAt: user.createdAt,
+    };
+  }
 }
 
 export class FollowStatusDto {

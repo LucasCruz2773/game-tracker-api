@@ -26,7 +26,7 @@ model User {
   username          String   @unique
   displayName       String?  @map("display_name")
   avatarUrl         String?  @map("avatar_url")
-  /// Once true, Google sign-ins no longer overwrite displayName or avatarUrl.
+  /// Once true, Google sign-ins no longer overwrite avatarUrl.
   profileCustomized Boolean  @default(false) @map("profile_customized")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)

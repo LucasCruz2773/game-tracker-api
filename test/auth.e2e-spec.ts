@@ -140,12 +140,11 @@ describe('Auth (e2e)', () => {
       await expect(prisma.user.count()).resolves.toBe(1);
     });
 
-    it('preserves a customized profile on later Google sign-ins', async () => {
+    it('preserves the customized nick and avatar on later Google sign-ins', async () => {
       const first = await signInWithGoogle();
       await first.agent
         .patch('/auth/me')
         .send({
-          displayName: 'Retro Lucas',
           username: 'retro_lucas',
           avatarUrl: 'https://example.com/retro-avatar.png',
         })
@@ -160,7 +159,7 @@ describe('Auth (e2e)', () => {
       const currentUser = await second.agent.get('/auth/me').expect(200);
 
       expect(currentUser.body).toMatchObject({
-        displayName: 'Retro Lucas',
+        displayName: 'Changed on Google',
         username: 'retro_lucas',
         avatarUrl: 'https://example.com/retro-avatar.png',
       });
@@ -264,14 +263,12 @@ describe('Auth (e2e)', () => {
       const response = await agent
         .patch('/auth/me')
         .send({
-          displayName: '  Retro Lucas  ',
           username: 'RETRO_LUCAS',
           avatarUrl: 'https://example.com/avatar.png',
         })
         .expect(200);
 
       expect(response.body).toMatchObject({
-        displayName: 'Retro Lucas',
         username: 'retro_lucas',
         avatarUrl: 'https://example.com/avatar.png',
       });
@@ -283,16 +280,15 @@ describe('Auth (e2e)', () => {
       ).resolves.toEqual({ profileCustomized: true });
     });
 
-    it('allows clearing the name and avatar', async () => {
+    it('allows clearing the avatar', async () => {
       const { agent } = await signInWithGoogle();
 
       const response = await agent
         .patch('/auth/me')
-        .send({ displayName: ' ', avatarUrl: '' })
+        .send({ avatarUrl: '' })
         .expect(200);
 
       expect(response.body).toMatchObject({
-        displayName: null,
         avatarUrl: null,
       });
     });
@@ -312,6 +308,10 @@ describe('Auth (e2e)', () => {
         .patch('/auth/me')
         .send({ username: 'taken_name' })
         .expect(409);
+      await agent
+        .patch('/auth/me')
+        .send({ displayName: 'Not editable' })
+        .expect(400);
       await agent.patch('/auth/me').send({}).expect(400);
     });
 

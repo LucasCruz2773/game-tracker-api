@@ -25,11 +25,7 @@ export class UsersService {
     userId: string,
     changes: UpdateUserProfileDto,
   ): Promise<User> {
-    if (
-      changes.displayName === undefined &&
-      changes.username === undefined &&
-      changes.avatarUrl === undefined
-    ) {
+    if (changes.username === undefined && changes.avatarUrl === undefined) {
       throw new BadRequestException('Provide at least one profile field');
     }
 
@@ -37,9 +33,6 @@ export class UsersService {
       return await this.prisma.user.update({
         where: { id: userId },
         data: {
-          ...(changes.displayName !== undefined && {
-            displayName: changes.displayName,
-          }),
           ...(changes.username !== undefined && {
             username: changes.username,
           }),
@@ -79,7 +72,10 @@ export class UsersService {
       return this.prisma.user.update({
         where: { id: existingUser.id },
         data: existingUser.profileCustomized
-          ? { email: googleProfileData.email }
+          ? {
+              email: googleProfileData.email,
+              displayName: googleProfileData.displayName,
+            }
           : googleProfileData,
       });
     }

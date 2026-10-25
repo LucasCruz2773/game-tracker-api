@@ -4,6 +4,7 @@ import { App } from 'supertest/types.js';
 import { PrismaService } from '../src/database/prisma.service.js';
 import {
   createAuthenticatedUser,
+  createGame,
   type AuthenticatedTestUser,
 } from './support/fixtures.js';
 import { createTestApp, resetDatabase } from './support/test-app.js';
@@ -81,6 +82,112 @@ describe('Users social connections (e2e)', () => {
 
     it('requires a session', async () => {
       await request(app.getHttpServer()).get('/users').expect(401);
+    });
+  });
+
+  describe('GET /users/me social connections', () => {
+    it('returns the counters and paginated people in both directions', async () => {
+      const follower = await createAuthenticatedUser(app, 'player_three');
+
+      await asPlayer().post('/users/player_two/follow').expect(201);
+      await asPlayer().post('/users/player_three/follow').expect(201);
+      await asPlayer(follower).post('/users/player_one/follow').expect(201);
+
+      await asPlayer().get('/users/me/social-summary').expect(200, {
+        followerCount: 1,
+        followingCount: 2,
+      });
+
+      const followers = await asPlayer().get('/users/me/followers').expect(200);
+      expect(followers.body).toMatchObject({
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        items: [{ username: 'player_three', isFollowing: true }],
+      });
+
+      const following = await asPlayer()
+        .get('/users/me/following?page=1&pageSize=1')
+        .expect(200);
+      expect(following.body).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        total: 2,
+        items: [{ username: 'player_three', isFollowing: true }],
+      });
+    });
+
+    it('requires a session for the summary and both lists', async () => {
+      const server = app.getHttpServer();
+      await request(server).get('/users/me/social-summary').expect(401);
+      await request(server).get('/users/me/followers').expect(401);
+      await request(server).get('/users/me/following').expect(401);
+    });
+  });
+
+  describe('GET /users/:username public profile', () => {
+    it("returns another player's profile, library and summary", async () => {
+      const game = await createGame(app, 'Public Game');
+      await asPlayer().post('/users/player_two/follow').expect(201);
+      await asPlayer(otherPlayer)
+        .post('/library')
+        .send({
+          gameId: game.id,
+          status: 'COMPLETED',
+          hoursPlayed: 18,
+        })
+        .expect(201);
+      await asPlayer(otherPlayer)
+        .post(`/games/${game.id}/reviews`)
+        .send({ rating: 9 })
+        .expect(201);
+
+      const profile = await asPlayer().get('/users/player_two').expect(200);
+      expect(profile.body).toEqual({
+        id: otherPlayer.user.id,
+        username: 'player_two',
+        avatarUrl: null,
+        createdAt: expect.any(String),
+        followerCount: 1,
+        followingCount: 0,
+        isFollowing: true,
+      });
+
+      const library = await asPlayer()
+        .get('/users/player_two/library')
+        .expect(200);
+      expect(library.body).toMatchObject({
+        total: 1,
+        items: [
+          {
+            status: 'COMPLETED',
+            hoursPlayed: 18,
+            game: { id: game.id, title: 'Public Game' },
+            review: { rating: 9, starRating: 4.5 },
+          },
+        ],
+      });
+
+      await asPlayer()
+        .get('/users/player_two/summary')
+        .expect(200, {
+          totalGames: 1,
+          byStatus: { PLAYING: 0, BACKLOG: 0, COMPLETED: 1, DROPPED: 0 },
+          totalHoursPlayed: 18,
+          averageRating: 9,
+          averageStarRating: 4.5,
+        });
+    });
+
+    it('returns 404 for an unknown player and requires a session', async () => {
+      await asPlayer().get('/users/missing_player').expect(404);
+      await asPlayer().get('/users/missing_player/library').expect(404);
+      await asPlayer().get('/users/missing_player/summary').expect(404);
+
+      const server = app.getHttpServer();
+      await request(server).get('/users/player_two').expect(401);
+      await request(server).get('/users/player_two/library').expect(401);
+      await request(server).get('/users/player_two/summary').expect(401);
     });
   });
 

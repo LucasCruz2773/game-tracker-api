@@ -14,8 +14,8 @@ API REST do **GameTrack**, uma aplicação para buscar jogos, organizar uma bibl
 
 - Autenticação com Google OAuth 2.0 e PKCE.
 - Sessão JWT armazenada em cookie `httpOnly`.
-- Perfil personalizável com nome, nick e foto por URL pública.
-- Busca de jogadores e conexões sociais para seguir ou deixar de seguir usuários.
+- Perfil personalizável com nick e foto por URL pública.
+- Perfis públicos com biblioteca, resumo, contadores e listas de seguidores/seguindo, além de seguir ou deixar de seguir usuários.
 - Busca e detalhes de jogos pelo catálogo RAWG.
 - Vinculação da conta Steam por OpenID, com status e nota individuais na importação.
 - Sincronização manual do tempo jogado sem reduzir valores registrados pelo usuário.
@@ -143,7 +143,7 @@ Use [`.env.example`](./.env.example) como referência. Não versione o arquivo `
 | Games   | `GET /games`, `GET /games/:id`                                                                                              |
 | Library | `GET/POST /library`, `GET/PATCH/DELETE /library/:gameId`, `GET /library/stats`                                              |
 | Reviews | `GET/POST /games/:gameId/reviews`, `GET .../reviews/mine`, `PATCH/DELETE /reviews/:id`                                      |
-| Social  | `GET /users`, `POST/DELETE /users/:username/follow`                                                                         |
+| Social  | `GET /users`, `GET /users/:username`, `GET /users/:username/library`, `GET /users/:username/summary`, conexões e follow     |
 | Steam   | `GET /integrations/steam/connect`, `GET .../callback`, `GET/DELETE /integrations/steam`, `POST .../sync`, `POST .../import` |
 
 Endpoints protegidos exigem o cookie de sessão `gametrack_session`. O Swagger fica habilitado apenas fora de produção.

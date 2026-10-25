@@ -6,7 +6,6 @@ import {
   IsUrl,
   Matches,
   MaxLength,
-  MinLength,
   ValidateIf,
 } from 'class-validator';
 
@@ -15,21 +14,6 @@ function trimmedOrNull(value: unknown): unknown {
 }
 
 export class UpdateUserProfileDto {
-  @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    minLength: 2,
-    maxLength: 50,
-    example: 'Lucas Fernandes',
-  })
-  @IsOptional()
-  @Transform(({ value }) => trimmedOrNull(value))
-  @ValidateIf((_object, value) => value !== null)
-  @IsString()
-  @MinLength(2)
-  @MaxLength(50)
-  displayName?: string | null;
-
   @ApiPropertyOptional({
     minLength: 3,
     maxLength: 30,

@@ -9,8 +9,10 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { ListUsersQueryDto } from './dto/list-users-query.dto.js';
 import {
   type FollowStatusDto,
+  PublicProfileDto,
   SocialUserDto,
   type SocialUserListResponseDto,
+  type SocialSummaryDto,
 } from './dto/social-user-response.dto.js';
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -26,13 +28,92 @@ export class SocialService {
     const search = query.search?.trim();
     const where: Prisma.UserWhereInput = {
       id: { not: viewerId },
-      ...(search && {
-        OR: [
-          { username: { contains: search, mode: 'insensitive' } },
-          { displayName: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
+      ...this.searchWhere(search),
     };
+
+    return this.listSocialUsers(viewerId, where, query);
+  }
+
+  async getSummary(viewerId: string): Promise<SocialSummaryDto> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: viewerId },
+      select: { _count: { select: { followers: true, following: true } } },
+    });
+
+    return {
+      followerCount: user._count.followers,
+      followingCount: user._count.following,
+    };
+  }
+
+  async getPublicProfile(
+    viewerId: string,
+    username: string,
+  ): Promise<PublicProfileDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        avatarUrl: true,
+        createdAt: true,
+        followers: {
+          where: { followerId: viewerId },
+          select: { followerId: true },
+          take: 1,
+        },
+        _count: { select: { followers: true, following: true } },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return PublicProfileDto.fromEntity(user);
+  }
+
+  async findUserIdByUsername(username: string): Promise<string> {
+    return (await this.findFollowTarget(username)).id;
+  }
+
+  listFollowers(
+    viewerId: string,
+    query: ListUsersQueryDto,
+  ): Promise<SocialUserListResponseDto> {
+    const search = query.search?.trim();
+    return this.listSocialUsers(
+      viewerId,
+      {
+        id: { not: viewerId },
+        following: { some: { followingId: viewerId } },
+        ...this.searchWhere(search),
+      },
+      query,
+    );
+  }
+
+  listFollowing(
+    viewerId: string,
+    query: ListUsersQueryDto,
+  ): Promise<SocialUserListResponseDto> {
+    const search = query.search?.trim();
+    return this.listSocialUsers(
+      viewerId,
+      {
+        id: { not: viewerId },
+        followers: { some: { followerId: viewerId } },
+        ...this.searchWhere(search),
+      },
+      query,
+    );
+  }
+
+  private async listSocialUsers(
+    viewerId: string,
+    where: Prisma.UserWhereInput,
+    query: ListUsersQueryDto,
+  ): Promise<SocialUserListResponseDto> {
     const socialSelect = {
       id: true,
       username: true,
@@ -63,6 +144,17 @@ export class SocialService {
       pageSize: query.pageSize,
       total,
     };
+  }
+
+  private searchWhere(search?: string): Prisma.UserWhereInput {
+    return search
+      ? {
+          OR: [
+            { username: { contains: search, mode: 'insensitive' } },
+            { displayName: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
   }
 
   async follow(followerId: string, username: string): Promise<FollowStatusDto> {
