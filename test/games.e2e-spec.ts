@@ -205,6 +205,39 @@ describe('Games (e2e)', () => {
       });
     });
 
+    it('returns the community rating average and review count', async () => {
+      const searchResponse = await searchCatalog([celeste]);
+      const gameId = searchResponse.body.items[0].id as string;
+      rawgClient.getGameDetails.mockResolvedValue(celesteDetails);
+      const users = await Promise.all(
+        [1, 2].map((number) =>
+          prisma.user.create({
+            data: {
+              googleId: `google-rating-${number}`,
+              email: `rating-${number}@example.com`,
+              username: `rating_user_${number}`,
+            },
+          }),
+        ),
+      );
+      await prisma.review.createMany({
+        data: [
+          { userId: users[0].id, gameId, rating: 8 },
+          { userId: users[1].id, gameId, rating: 9 },
+        ],
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/games/${gameId}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        averageRating: 8.5,
+        averageStarRating: 4.3,
+        reviewCount: 2,
+      });
+    });
+
     it('answers 404 for an unknown game and 400 for an invalid id', async () => {
       await request(app.getHttpServer())
         .get('/games/0192f5a0-0000-7000-8000-000000000000')

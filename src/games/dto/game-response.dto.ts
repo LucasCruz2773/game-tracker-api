@@ -54,9 +54,27 @@ export class GameDetailsDto extends GameSummaryDto {
   @ApiProperty({ type: String, nullable: true })
   description: string | null;
 
-  static override fromEntity(game: GameWithTags): GameDetailsDto {
+  @ApiProperty({ type: Number, nullable: true, example: 8.6 })
+  averageRating: number | null;
+
+  @ApiProperty({ type: Number, nullable: true, example: 4.3 })
+  averageStarRating: number | null;
+
+  @ApiProperty({ example: 42 })
+  reviewCount: number;
+
+  static fromEntityWithRatings(
+    game: GameWithTags,
+    ratings: { averageRating: number | null; reviewCount: number },
+  ): GameDetailsDto {
     return Object.assign(GameSummaryDto.fromEntity(game), {
       description: game.description,
+      averageRating: ratings.averageRating,
+      averageStarRating:
+        ratings.averageRating === null
+          ? null
+          : Math.round((ratings.averageRating / 2) * 10) / 10,
+      reviewCount: ratings.reviewCount,
     });
   }
 }

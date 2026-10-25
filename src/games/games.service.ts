@@ -58,7 +58,19 @@ export class GamesService {
       ? game
       : await this.syncGameDetails(game);
 
-    return GameDetailsDto.fromEntity(syncedGame);
+    const reviewAggregate = await this.prisma.review.aggregate({
+      where: { gameId: id },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+    const rawAverage = reviewAggregate._avg.rating;
+    const averageRating =
+      rawAverage === null ? null : Math.round(Number(rawAverage) * 10) / 10;
+
+    return GameDetailsDto.fromEntityWithRatings(syncedGame, {
+      averageRating,
+      reviewCount: reviewAggregate._count._all,
+    });
   }
 
   async fetchCover(id: string): Promise<{ body: Buffer; contentType: string }> {
