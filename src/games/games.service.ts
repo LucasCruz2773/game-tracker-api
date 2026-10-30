@@ -15,7 +15,10 @@ import {
   GameSearchResponseDto,
   GameSummaryDto,
 } from './dto/game-response.dto.js';
-import type { SearchGamesQueryDto } from './dto/search-games-query.dto.js';
+import {
+  GameOrdering,
+  type SearchGamesQueryDto,
+} from './dto/search-games-query.dto.js';
 import { gameWithTagsInclude, type GameWithTags } from './game.include.js';
 import { CatalogUnavailableException, RawgClient } from './rawg/rawg.client.js';
 
@@ -29,8 +32,11 @@ export class GamesService {
   ) {}
 
   async search(query: SearchGamesQueryDto): Promise<GameSearchResponseDto> {
+    const discover = query.search === undefined;
     const catalogResult = await this.rawgClient.searchGames({
       search: query.search,
+      ordering: toRawgOrdering(query.ordering, discover),
+      discover,
       page: query.page,
       pageSize: query.pageSize,
     });
@@ -239,6 +245,24 @@ export class GamesService {
       data: uniqueBySlug(catalogGames.flatMap((game) => game.platforms)),
       skipDuplicates: true,
     });
+  }
+}
+
+function toRawgOrdering(
+  ordering: GameOrdering,
+  discover: boolean,
+): '-relevance' | '-added' | '-rating' | 'name' | '-released' | undefined {
+  switch (ordering) {
+    case GameOrdering.Popularity:
+      return '-added';
+    case GameOrdering.Rating:
+      return '-rating';
+    case GameOrdering.Name:
+      return 'name';
+    case GameOrdering.Released:
+      return '-released';
+    case GameOrdering.Relevance:
+      return discover ? '-relevance' : undefined;
   }
 }
 

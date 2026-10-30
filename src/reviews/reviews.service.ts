@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
-import { ActivityType, Prisma } from '../generated/prisma/client.js';
+import {
+  ActivityType,
+  LibraryStatus,
+  Prisma,
+} from '../generated/prisma/client.js';
 import type { CreateReviewDto } from './dto/create-review.dto.js';
 import type { ListReviewsQueryDto } from './dto/list-reviews-query.dto.js';
 import {
@@ -75,6 +79,11 @@ export class ReviewsService {
     try {
       const body = normalizeBody(createReviewDto.body);
       const review = await this.prisma.$transaction(async (transaction) => {
+        await transaction.gameLibrary.upsert({
+          where: { userId_gameId: { userId, gameId } },
+          update: {},
+          create: { userId, gameId, status: LibraryStatus.UNSET },
+        });
         const created = await transaction.review.create({
           data: {
             userId,
@@ -164,6 +173,16 @@ export class ReviewsService {
           actorId: userId,
           gameId: review.gameId,
           type: ActivityType.REVIEWED,
+        },
+      }),
+      this.prisma.gameLibrary.deleteMany({
+        where: {
+          userId,
+          gameId: review.gameId,
+          status: LibraryStatus.UNSET,
+          hoursPlayed: 0,
+          startedAt: null,
+          completedAt: null,
         },
       }),
     ]);

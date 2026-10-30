@@ -2,6 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { LibraryStatus } from '../../generated/prisma/client.js';
 
 export class LibraryStatusCountsDto {
+  @ApiProperty({ example: 1 })
+  UNSET: number;
+
   @ApiProperty({ example: 2 })
   PLAYING: number;
 
@@ -44,6 +47,7 @@ export class LibraryStatsDto {
 
 export function emptyStatusCounts(): LibraryStatusCountsDto {
   return {
+    [LibraryStatus.UNSET]: 0,
     [LibraryStatus.PLAYING]: 0,
     [LibraryStatus.BACKLOG]: 0,
     [LibraryStatus.COMPLETED]: 0,

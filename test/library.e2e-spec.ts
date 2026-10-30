@@ -120,7 +120,7 @@ describe('Library (e2e)', () => {
       expect(response.body.message).toEqual(
         expect.arrayContaining([
           'gameId must be a UUID',
-          'status must be one of the following values: BACKLOG, PLAYING, COMPLETED, DROPPED',
+          'status must be one of the following values: UNSET, BACKLOG, PLAYING, COMPLETED, DROPPED',
           'hoursPlayed must not be less than 0',
           'startedAt must be a date in the YYYY-MM-DD format',
         ]),
@@ -265,7 +265,13 @@ describe('Library (e2e)', () => {
 
       expect(response.body).toEqual({
         totalGames: 0,
-        byStatus: { PLAYING: 0, BACKLOG: 0, COMPLETED: 0, DROPPED: 0 },
+        byStatus: {
+          UNSET: 0,
+          PLAYING: 0,
+          BACKLOG: 0,
+          COMPLETED: 0,
+          DROPPED: 0,
+        },
         totalHoursPlayed: 0,
         averageRating: null,
         averageStarRating: null,
@@ -296,7 +302,13 @@ describe('Library (e2e)', () => {
 
       expect(response.body).toEqual({
         totalGames: 3,
-        byStatus: { PLAYING: 1, BACKLOG: 1, COMPLETED: 1, DROPPED: 0 },
+        byStatus: {
+          UNSET: 0,
+          PLAYING: 1,
+          BACKLOG: 1,
+          COMPLETED: 1,
+          DROPPED: 0,
+        },
         totalHoursPlayed: 35,
         averageRating: 9,
         averageStarRating: 4.5,

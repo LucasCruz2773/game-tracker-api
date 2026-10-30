@@ -127,6 +127,18 @@ describe('Reviews (e2e)', () => {
           username: 'player_one',
         }),
       });
+
+      const library = await asPlayer().get('/library').expect(200);
+      expect(library.body).toMatchObject({
+        total: 1,
+        items: [
+          {
+            status: 'UNSET',
+            game: { id: celeste.id },
+            review: { id: response.body.id, rating: 8, starRating: 4 },
+          },
+        ],
+      });
     });
 
     it('stores an empty body as null', async () => {
@@ -197,6 +209,8 @@ describe('Reviews (e2e)', () => {
 
       await asPlayer().delete(`/reviews/${created.body.id}`).expect(204);
       await asPlayer().get(`/games/${celeste.id}/reviews/mine`).expect(404);
+      const library = await asPlayer().get('/library').expect(200);
+      expect(library.body.total).toBe(0);
     });
 
     it('forbids deleting someone else review', async () => {

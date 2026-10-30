@@ -237,9 +237,19 @@ export class LibraryService {
   }
 
   async remove(userId: string, gameId: string): Promise<void> {
-    const { count } = await this.prisma.gameLibrary.deleteMany({
-      where: { userId, gameId },
-    });
+    const review = await this.findReview(userId, gameId);
+    const { count } = review
+      ? await this.prisma.gameLibrary.updateMany({
+          where: { userId, gameId },
+          data: {
+            status: 'UNSET',
+            startedAt: null,
+            completedAt: null,
+          },
+        })
+      : await this.prisma.gameLibrary.deleteMany({
+          where: { userId, gameId },
+        });
 
     if (count === 0) {
       throw notInLibrary();

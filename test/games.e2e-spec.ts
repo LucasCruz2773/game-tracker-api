@@ -73,6 +73,8 @@ describe('Games (e2e)', () => {
 
       expect(rawgClient.searchGames).toHaveBeenCalledWith({
         search: 'celeste',
+        ordering: undefined,
+        discover: false,
         page: 1,
         pageSize: 20,
       });
@@ -98,6 +100,23 @@ describe('Games (e2e)', () => {
       });
       await expect(prisma.game.count()).resolves.toBe(2);
       await expect(prisma.genre.count()).resolves.toBe(2);
+    });
+
+    it('maps ordering presets to RAWG ordering fields', async () => {
+      rawgClient.searchGames.mockResolvedValue({ total: 0, games: [] });
+
+      await request(app.getHttpServer())
+        .get('/games')
+        .query({ ordering: 'popularity' })
+        .expect(200);
+
+      expect(rawgClient.searchGames).toHaveBeenCalledWith(
+        expect.objectContaining({ ordering: '-added', discover: true }),
+      );
+      await request(app.getHttpServer())
+        .get('/games')
+        .query({ ordering: 'unknown' })
+        .expect(400);
     });
 
     it('updates existing games instead of duplicating them', async () => {

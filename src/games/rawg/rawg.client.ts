@@ -22,9 +22,14 @@ const REQUEST_TIMEOUT_MS = 5_000;
 
 export interface SearchCatalogParams {
   search?: string;
+  ordering?: RawgGameOrdering;
+  discover?: boolean;
   page: number;
   pageSize: number;
 }
+
+export type RawgGameOrdering =
+  '-relevance' | '-added' | '-rating' | 'name' | '-released';
 
 export class CatalogUnavailableException extends BadGatewayException {
   constructor() {
@@ -46,11 +51,16 @@ export class RawgClient {
   }
 
   async searchGames(params: SearchCatalogParams): Promise<CatalogSearchResult> {
-    const response = await this.request('/games', {
-      search: params.search,
-      page: String(params.page),
-      page_size: String(params.pageSize),
-    });
+    const response = await this.request(
+      params.discover ? '/games/lists/main' : '/games',
+      {
+        discover: params.discover ? 'true' : undefined,
+        search: params.search,
+        ordering: params.ordering,
+        page: String(params.page),
+        page_size: String(params.pageSize),
+      },
+    );
 
     // RAWG answers 404 for pages beyond the last one.
     if (response.status === HttpStatus.NOT_FOUND) {

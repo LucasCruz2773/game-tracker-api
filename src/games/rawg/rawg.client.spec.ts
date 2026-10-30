@@ -49,13 +49,19 @@ describe('RawgClient', () => {
   it('sends the API key and search parameters', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ count: 0, results: [] }));
 
-    await rawgClient.searchGames({ search: 'celeste', page: 2, pageSize: 10 });
+    await rawgClient.searchGames({
+      search: 'celeste',
+      ordering: '-rating',
+      page: 2,
+      pageSize: 10,
+    });
 
     const requestedUrl = fetchMock.mock.calls[0][0] as URL;
     expect(requestedUrl.pathname).toBe('/api/games');
     expect(Object.fromEntries(requestedUrl.searchParams)).toEqual({
       key: API_KEY,
       search: 'celeste',
+      ordering: '-rating',
       page: '2',
       page_size: '10',
     });
@@ -72,6 +78,24 @@ describe('RawgClient', () => {
     const requestedUrl = fetchMock.mock.calls[0][0] as URL;
     expect(requestedUrl.origin).toBe('http://localhost:3200');
     expect(requestedUrl.pathname).toBe('/games');
+  });
+
+  it('uses RAWG discovery list for the main exploration page', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ count: 0, results: [] }));
+
+    await rawgClient.searchGames({
+      discover: true,
+      ordering: '-relevance',
+      page: 1,
+      pageSize: 20,
+    });
+
+    const requestedUrl = fetchMock.mock.calls[0][0] as URL;
+    expect(requestedUrl.pathname).toBe('/api/games/lists/main');
+    expect(Object.fromEntries(requestedUrl.searchParams)).toMatchObject({
+      discover: 'true',
+      ordering: '-relevance',
+    });
   });
 
   it('returns an empty page when RAWG answers 404 for a page out of range', async () => {

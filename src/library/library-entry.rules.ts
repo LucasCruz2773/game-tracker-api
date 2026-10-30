@@ -47,6 +47,15 @@ export function resolveLibraryProgress(
     completedAt = null;
   }
 
+  if (status === LibraryStatus.UNSET) {
+    if (changes.startedAt) {
+      throw new UnprocessableEntityException(
+        'startedAt cannot be set when the status is UNSET',
+      );
+    }
+    startedAt = null;
+  }
+
   if (
     statusChanged &&
     status === LibraryStatus.PLAYING &&

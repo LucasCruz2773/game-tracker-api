@@ -61,6 +61,24 @@ describe('resolveLibraryProgress', () => {
   });
 
   describe('status changes', () => {
+    it('clears progress dates when the status is removed', () => {
+      expect(
+        resolveLibraryProgress(
+          entry({
+            status: LibraryStatus.COMPLETED,
+            startedAt: may1,
+            completedAt: may20,
+          }),
+          { status: LibraryStatus.UNSET },
+          today,
+        ),
+      ).toEqual({
+        status: LibraryStatus.UNSET,
+        startedAt: null,
+        completedAt: null,
+      });
+    });
+
     it('keeps the original start date when resuming a game', () => {
       expect(
         resolveLibraryProgress(
@@ -111,6 +129,16 @@ describe('resolveLibraryProgress', () => {
   });
 
   describe('invalid combinations', () => {
+    it('rejects a start date without a status', () => {
+      expect(() =>
+        resolveLibraryProgress(
+          entry(),
+          { status: LibraryStatus.UNSET, startedAt: may1 },
+          today,
+        ),
+      ).toThrow('startedAt cannot be set when the status is UNSET');
+    });
+
     it('rejects a completion date for a game that is not COMPLETED', () => {
       expect(() =>
         resolveLibraryProgress(
