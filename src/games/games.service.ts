@@ -33,7 +33,10 @@ export class GamesService {
   ) {}
 
   async search(query: SearchGamesQueryDto): Promise<GameSearchResponseDto> {
-    const discover = query.search === undefined;
+    // RAWG's internal discovery endpoint is useful for its relevance ranking,
+    // but unlike the documented /games endpoint it does not reliably apply
+    // catalog filters. Use the public endpoint whenever a genre is selected.
+    const discover = query.search === undefined && query.genre === undefined;
     const catalogResult = await this.rawgClient.searchGames({
       search: query.search,
       ordering: toRawgOrdering(query.ordering, query.direction, discover),

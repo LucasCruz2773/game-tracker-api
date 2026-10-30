@@ -60,6 +60,7 @@ describe('RawgClient', () => {
     expect(requestedUrl.pathname).toBe('/api/games');
     expect(Object.fromEntries(requestedUrl.searchParams)).toEqual({
       key: API_KEY,
+      exclude_additions: 'true',
       search: 'celeste',
       ordering: '-rating',
       page: '2',
@@ -80,12 +81,11 @@ describe('RawgClient', () => {
     expect(requestedUrl.pathname).toBe('/games');
   });
 
-  it('uses RAWG discovery list for the main exploration page', async () => {
+  it('uses RAWG discovery list for the unfiltered exploration page', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ count: 0, results: [] }));
 
     await rawgClient.searchGames({
       discover: true,
-      genre: 'role-playing-games-rpg',
       ordering: '-relevance',
       page: 1,
       pageSize: 20,
@@ -95,9 +95,46 @@ describe('RawgClient', () => {
     expect(requestedUrl.pathname).toBe('/api/games/lists/main');
     expect(Object.fromEntries(requestedUrl.searchParams)).toMatchObject({
       discover: 'true',
-      genres: 'role-playing-games-rpg',
       ordering: '-relevance',
     });
+    expect(requestedUrl.searchParams.has('exclude_additions')).toBe(false);
+  });
+
+  it('uses the documented games endpoint for genre filters', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ count: 0, results: [] }));
+
+    await rawgClient.searchGames({
+      genre: 'role-playing-games-rpg',
+      page: 1,
+      pageSize: 20,
+    });
+
+    const requestedUrl = fetchMock.mock.calls[0][0] as URL;
+    expect(requestedUrl.pathname).toBe('/api/games');
+    expect(Object.fromEntries(requestedUrl.searchParams)).toMatchObject({
+      genres: 'role-playing-games-rpg',
+      exclude_additions: 'true',
+    });
+  });
+
+  it('removes duplicate game ids returned by RAWG', async () => {
+    const game = {
+      id: 1,
+      slug: 'celeste',
+      name: 'Celeste',
+      released: '2018-01-25',
+      background_image: null,
+      genres: [],
+      platforms: [],
+    };
+    fetchMock.mockResolvedValue(
+      jsonResponse({ count: 2, results: [game, game] }),
+    );
+
+    const result = await rawgClient.searchGames({ page: 1, pageSize: 20 });
+
+    expect(result.games).toHaveLength(1);
+    expect(result.games[0]?.rawgId).toBe(1);
   });
 
   it('returns an empty page when RAWG answers 404 for a page out of range', async () => {

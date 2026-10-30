@@ -64,6 +64,7 @@ export class RawgClient {
       params.discover ? '/games/lists/main' : '/games',
       {
         discover: params.discover ? 'true' : undefined,
+        exclude_additions: params.discover ? undefined : 'true',
         genres: params.genre,
         search: params.search,
         ordering: params.ordering,
@@ -85,11 +86,17 @@ export class RawgClient {
       throw new CatalogUnavailableException();
     }
 
+    const gamesById = new Map<number, CatalogGame>();
+    for (const rawgGame of body.results) {
+      const game = toCatalogGame(rawgGame);
+      if (game && !gamesById.has(game.rawgId)) {
+        gamesById.set(game.rawgId, game);
+      }
+    }
+
     return {
       total: body.count,
-      games: body.results
-        .map(toCatalogGame)
-        .filter((game): game is CatalogGame => game !== null),
+      games: [...gamesById.values()],
     };
   }
 
