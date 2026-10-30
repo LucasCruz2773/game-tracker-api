@@ -24,12 +24,21 @@ export interface SearchCatalogParams {
   search?: string;
   ordering?: RawgGameOrdering;
   discover?: boolean;
+  genre?: string;
   page: number;
   pageSize: number;
 }
 
 export type RawgGameOrdering =
-  '-relevance' | '-added' | '-rating' | 'name' | '-released';
+  | '-relevance'
+  | 'added'
+  | '-added'
+  | 'rating'
+  | '-rating'
+  | 'name'
+  | '-name'
+  | 'released'
+  | '-released';
 
 export class CatalogUnavailableException extends BadGatewayException {
   constructor() {
@@ -55,6 +64,7 @@ export class RawgClient {
       params.discover ? '/games/lists/main' : '/games',
       {
         discover: params.discover ? 'true' : undefined,
+        genres: params.genre,
         search: params.search,
         ordering: params.ordering,
         page: String(params.page),

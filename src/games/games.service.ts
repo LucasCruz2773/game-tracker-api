@@ -17,6 +17,7 @@ import {
 } from './dto/game-response.dto.js';
 import {
   GameOrdering,
+  GameSortDirection,
   type SearchGamesQueryDto,
 } from './dto/search-games-query.dto.js';
 import { gameWithTagsInclude, type GameWithTags } from './game.include.js';
@@ -35,8 +36,9 @@ export class GamesService {
     const discover = query.search === undefined;
     const catalogResult = await this.rawgClient.searchGames({
       search: query.search,
-      ordering: toRawgOrdering(query.ordering, discover),
+      ordering: toRawgOrdering(query.ordering, query.direction, discover),
       discover,
+      genre: query.genre,
       page: query.page,
       pageSize: query.pageSize,
     });
@@ -250,17 +252,35 @@ export class GamesService {
 
 function toRawgOrdering(
   ordering: GameOrdering,
+  requestedDirection: GameSortDirection | undefined,
   discover: boolean,
-): '-relevance' | '-added' | '-rating' | 'name' | '-released' | undefined {
+):
+  | '-relevance'
+  | 'added'
+  | '-added'
+  | 'rating'
+  | '-rating'
+  | 'name'
+  | '-name'
+  | 'released'
+  | '-released'
+  | undefined {
+  const direction =
+    requestedDirection ??
+    (ordering === GameOrdering.Name
+      ? GameSortDirection.Ascending
+      : GameSortDirection.Descending);
+  const descending = direction === GameSortDirection.Descending;
+
   switch (ordering) {
     case GameOrdering.Popularity:
-      return '-added';
+      return descending ? '-added' : 'added';
     case GameOrdering.Rating:
-      return '-rating';
+      return descending ? '-rating' : 'rating';
     case GameOrdering.Name:
-      return 'name';
+      return descending ? '-name' : 'name';
     case GameOrdering.Released:
-      return '-released';
+      return descending ? '-released' : 'released';
     case GameOrdering.Relevance:
       return discover ? '-relevance' : undefined;
   }

@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -17,6 +18,11 @@ export enum GameOrdering {
   Released = 'released',
 }
 
+export enum GameSortDirection {
+  Ascending = 'asc',
+  Descending = 'desc',
+}
+
 export class SearchGamesQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({
     enum: GameOrdering,
@@ -26,6 +32,25 @@ export class SearchGamesQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(GameOrdering)
   ordering: GameOrdering = GameOrdering.Relevance;
+
+  @ApiPropertyOptional({
+    enum: GameSortDirection,
+    description:
+      'Defaults to ascending for name and descending for other fields.',
+  })
+  @IsOptional()
+  @IsEnum(GameSortDirection)
+  direction?: GameSortDirection;
+
+  @ApiPropertyOptional({
+    example: 'role-playing-games-rpg',
+    description: 'RAWG genre slug',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  genre?: string;
 
   @ApiPropertyOptional({
     example: 'celeste',

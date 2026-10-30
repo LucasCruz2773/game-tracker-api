@@ -85,6 +85,7 @@ describe('RawgClient', () => {
 
     await rawgClient.searchGames({
       discover: true,
+      genre: 'role-playing-games-rpg',
       ordering: '-relevance',
       page: 1,
       pageSize: 20,
@@ -94,6 +95,7 @@ describe('RawgClient', () => {
     expect(requestedUrl.pathname).toBe('/api/games/lists/main');
     expect(Object.fromEntries(requestedUrl.searchParams)).toMatchObject({
       discover: 'true',
+      genres: 'role-playing-games-rpg',
       ordering: '-relevance',
     });
   });

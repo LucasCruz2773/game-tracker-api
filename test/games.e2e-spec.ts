@@ -75,6 +75,7 @@ describe('Games (e2e)', () => {
         search: 'celeste',
         ordering: undefined,
         discover: false,
+        genre: undefined,
         page: 1,
         pageSize: 20,
       });
@@ -102,6 +103,23 @@ describe('Games (e2e)', () => {
       await expect(prisma.genre.count()).resolves.toBe(2);
     });
 
+    it('forwards a valid genre and rejects invalid slugs', async () => {
+      rawgClient.searchGames.mockResolvedValue({ total: 0, games: [] });
+
+      await request(app.getHttpServer())
+        .get('/games')
+        .query({ genre: 'role-playing-games-rpg' })
+        .expect(200);
+
+      expect(rawgClient.searchGames).toHaveBeenCalledWith(
+        expect.objectContaining({ genre: 'role-playing-games-rpg' }),
+      );
+      await request(app.getHttpServer())
+        .get('/games')
+        .query({ genre: '../invalid' })
+        .expect(400);
+    });
+
     it('maps ordering presets to RAWG ordering fields', async () => {
       rawgClient.searchGames.mockResolvedValue({ total: 0, games: [] });
 
@@ -115,7 +133,18 @@ describe('Games (e2e)', () => {
       );
       await request(app.getHttpServer())
         .get('/games')
+        .query({ ordering: 'popularity', direction: 'asc' })
+        .expect(200);
+      expect(rawgClient.searchGames).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ordering: 'added' }),
+      );
+      await request(app.getHttpServer())
+        .get('/games')
         .query({ ordering: 'unknown' })
+        .expect(400);
+      await request(app.getHttpServer())
+        .get('/games')
+        .query({ direction: 'sideways' })
         .expect(400);
     });
 
